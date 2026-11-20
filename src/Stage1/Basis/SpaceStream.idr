@@ -209,7 +209,7 @@ pushforwardMSetStream f (MkTimeStream start at) =
              BoxLeaf => StreamSkip
              _       => StreamYield pushed)
 
-||| 120-degree cyclic 3D rotation of a `VoxelSite` (`(x, y, z) -> (z, x, y)`)
+||| Equilateral spread s = 3/4 cyclic 3D rotation of a `VoxelSite` (`(x, y, z) -> (z, x, y)`)
 ||| around the diagonal axis `(1, 1, 1)` (Wildberger's projective proportion `[1 : 1 : 1 : 1]`).
 public export
 cycleVoxelSite : VoxelSite -> VoxelSite
