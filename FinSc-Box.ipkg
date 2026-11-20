@@ -13,6 +13,7 @@ modules = Stage0.BoxInt
         , Stage0.Multiset
         , Stage0.Multiplicity
         , Stage1.Basis.Space
+        , Stage1.Basis.SpaceStream
         , Stage1.Basis.Time
         , Stage1.ConvolutionAdmissibility
         , Stage1.Views
@@ -29,6 +30,7 @@ modules = Stage0.BoxInt
         , FinScBox.Multiset
         , FinScBox.Multiplicity
         , FinScBox.Space
+        , FinScBox.SpaceStream
         , FinScBox.Time
         , FinScBox.ConvolutionAdmissibility
         , FinScBox.ProjectiveRotation
