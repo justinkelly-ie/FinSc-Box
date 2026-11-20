@@ -21,7 +21,7 @@ popMinNode : Box c k -> Maybe (k, c, Box c k)
 popMinNode = extractMinBox
 
 public export
-antiBoxLoop : QuantumCarrier c => Nat -> HereditaryMSet c -> AntiBoxView c
+antiBoxLoop : QuantumMultiplicity c => Nat -> HereditaryMSet c -> AntiBoxView c
 antiBoxLoop Z _ = EmptyVacuum
 antiBoxLoop (S rem) (MkHMSet BoxLeaf) = EmptyVacuum
 antiBoxLoop (S rem) (MkHMSet tree@(BoxNode _ _ _ _ _)) =
@@ -39,7 +39,7 @@ antiBoxLoop (S rem) (MkHMSet tree@(BoxNode _ _ _ _ _)) =
 
 ||| Total covering function peeling one `+1` Black or `-1` Red quantum from the minimum key.
 public export
-viewAsAntiBox : QuantumCarrier c => HereditaryMSet c -> AntiBoxView c
+viewAsAntiBox : QuantumMultiplicity c => HereditaryMSet c -> AntiBoxView c
 viewAsAntiBox m@(MkHMSet tree) = antiBoxLoop (S (boxNodeCount tree)) m
 
 ------------------------------------------------------------------------

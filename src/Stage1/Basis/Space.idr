@@ -111,10 +111,10 @@ public export
 ------------------------------------------------------------------------
 
 ||| D-dimensional discrete space multiset:
-||| A Carrier over spatial sites in SpaceCoord dim.
+||| An MSetBox over spatial sites in SpaceCoord dim.
 public export
 Space : (dim : Nat) -> Type
-Space dim = Carrier (SpaceCoord dim)
+Space dim = MSetBox (SpaceCoord dim)
 
 -- Canonical Wildberger Dimensional Multiset Aliases:
 public export
@@ -151,4 +151,4 @@ liftSite x s = ConsSite x s
 public export
 liftSpace : {dim : Nat} -> Nat -> Space dim -> Space (S dim)
 liftSpace nextAxis m =
-  pushforwardCarrier (\s => ConsSite nextAxis s) m
+  pushforwardMSet (\s => ConsSite nextAxis s) m

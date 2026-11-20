@@ -285,178 +285,270 @@ multisetToListL (AddM k v rest) =
   in Builtin.(#) ((k, v) :: listRest) (AddM k v restM)
 
 ------------------------------------------------------------------------
--- FIRST-CLASS AVL MULTISET CARRIERS (`Carrier k = Box BoxInt k`)
+-- FIRST-CLASS AVL MULTISETS (`MSet m k = Box m k`, `MSetBox k = MSet BoxInt k`)
 ------------------------------------------------------------------------
 
-||| Canonical coordinate-indexed multiset carrier (`Carrier k = Box BoxInt k` /
-||| `BoxMultisetTree k`) backed by `Stage0.Box` signed `BoxInt` multiplicities.
+||| Canonical multiplicity-parameterised coordinate multiset (`MSet m k = Box m k`)
+||| backed by height-cached AVL trees in `Stage0.Box`.
+public export
+MSet : (m : Type) -> (k : Type) -> Type
+MSet m k = Box m k
+
+||| Canonical coordinate-indexed multiset with signed `BoxInt` multiplicities (`MSet BoxInt k`).
+public export
+MSetBox : Type -> Type
+MSetBox k = MSet BoxInt k
+
+||| Backward-compatible alias for `MSet BoxInt k`.
 public export
 Carrier : Type -> Type
-Carrier k = Box BoxInt k
+Carrier = MSetBox
 
-||| Backward-compatible alias for `Carrier k = Box BoxInt k`.
+||| Backward-compatible alias for `MSet BoxInt k`.
 public export
 BoxMultisetTree : Type -> Type
-BoxMultisetTree = Carrier
+BoxMultisetTree = MSetBox
 
-||| Empty carrier over coordinate domain `k`.
+||| Empty multiset over coordinate domain `k`.
 public export
-emptyCarrier : Carrier k
-emptyCarrier = BoxLeaf
+emptyMSet : MSetBox k
+emptyMSet = BoxLeaf
 
-||| Canonical empty `Carrier a` (`Box BoxInt a`), preserving the `{a}` implicit name.
 public export
-emptyBox : {0 a : Type} -> Carrier a
+emptyCarrier : MSetBox k
+emptyCarrier = emptyMSet
+
+||| Canonical empty `MSetBox a` (`Box BoxInt a`), preserving the `{a}` implicit name.
+public export
+emptyBox : {0 a : Type} -> MSetBox a
 emptyBox = BoxLeaf
 
-||| Direct O(1) singleton construction of a Carrier k without intermediate List allocation.
+||| Direct O(1) singleton construction of an `MSetBox k` without intermediate List allocation.
 public export
-singletonCarrier : k -> BoxInt -> Carrier k
-singletonCarrier = singletonBox
+singletonMSet : k -> BoxInt -> MSetBox k
+singletonMSet = singletonBox
+
+public export
+singletonCarrier : k -> BoxInt -> MSetBox k
+singletonCarrier = singletonMSet
 
 ||| Creates a singleton multiset in O(1) without Ord constraint.
 public export
-unixelBox : a -> BoxInt -> Carrier a
-unixelBox = singletonCarrier
+unixelBox : a -> BoxInt -> MSetBox a
+unixelBox = singletonMSet
 
 ||| Lookups the signed BoxInt multiplicity at coordinate `c` in O(log N) time.
 public export
-lookupCarrier : DiscreteCoord k => k -> Carrier k -> BoxInt
-lookupCarrier = lookupBox
+lookupMSet : DiscreteCoord k => k -> MSetBox k -> BoxInt
+lookupMSet = lookupBox
 
-||| Pointwise multiset addition (AddM) over Carrier k in O(N log N) time.
 public export
-addCarrier : DiscreteCoord k => Carrier k -> Carrier k -> Carrier k
-addCarrier = unionBox
+lookupCarrier : DiscreteCoord k => k -> MSetBox k -> BoxInt
+lookupCarrier = lookupMSet
 
-||| Pointwise multiset subtraction (SubM) over Carrier k in O(N log N) time.
+||| Pointwise multiset addition (AddM) over MSetBox k in O(N log N) time.
 public export
-subCarrier : DiscreteCoord k => Carrier k -> Carrier k -> Carrier k
-subCarrier = subBox
+addMSet : DiscreteCoord k => MSetBox k -> MSetBox k -> MSetBox k
+addMSet = unionBox
 
-||| Scalar multiplication of a Carrier k by a BoxInt factor.
 public export
-scaleCarrier : BoxInt -> Carrier k -> Carrier k
-scaleCarrier = scaleBox
+addCarrier : DiscreteCoord k => MSetBox k -> MSetBox k -> MSetBox k
+addCarrier = addMSet
 
-||| Pointwise Hadamard product (HadamardM) over Carrier k in O(N log N) time.
+||| Pointwise multiset subtraction (SubM) over MSetBox k in O(N log N) time.
 public export
-hadamardCarrier : DiscreteCoord k => Carrier k -> Carrier k -> Carrier k
-hadamardCarrier = hadamardBox
+subMSet : DiscreteCoord k => MSetBox k -> MSetBox k -> MSetBox k
+subMSet = subBox
 
-||| Pointwise lattice infimum (MinM) over Carrier k in O(N log N) time.
 public export
-minCarrier : DiscreteCoord k => Carrier k -> Carrier k -> Carrier k
-minCarrier = minBox
+subCarrier : DiscreteCoord k => MSetBox k -> MSetBox k -> MSetBox k
+subCarrier = subMSet
 
-||| Pointwise lattice supremum (MaxM) over Carrier k in O((N + M) log(N + M)) time.
+||| Scalar multiplication of an MSetBox k by a BoxInt factor.
 public export
-maxCarrier : DiscreteCoord k => Carrier k -> Carrier k -> Carrier k
-maxCarrier = maxBox
+scaleMSet : BoxInt -> MSetBox k -> MSetBox k
+scaleMSet = scaleBox
+
+public export
+scaleCarrier : BoxInt -> MSetBox k -> MSetBox k
+scaleCarrier = scaleMSet
+
+||| Pointwise Hadamard product (HadamardM) over MSetBox k in O(N log N) time.
+public export
+hadamardMSet : DiscreteCoord k => MSetBox k -> MSetBox k -> MSetBox k
+hadamardMSet = hadamardBox
+
+public export
+hadamardCarrier : DiscreteCoord k => MSetBox k -> MSetBox k -> MSetBox k
+hadamardCarrier = hadamardMSet
+
+||| Pointwise lattice infimum (MinM) over MSetBox k in O(N log N) time.
+public export
+minMSet : DiscreteCoord k => MSetBox k -> MSetBox k -> MSetBox k
+minMSet = minBox
+
+public export
+minCarrier : DiscreteCoord k => MSetBox k -> MSetBox k -> MSetBox k
+minCarrier = minMSet
+
+||| Pointwise lattice supremum (MaxM) over MSetBox k in O((N + M) log(N + M)) time.
+public export
+maxMSet : DiscreteCoord k => MSetBox k -> MSetBox k -> MSetBox k
+maxMSet = maxBox
+
+public export
+maxCarrier : DiscreteCoord k => MSetBox k -> MSetBox k -> MSetBox k
+maxCarrier = maxMSet
 
 ||| Computes total mass of common shared tokens between two multisets |A ∩ B|.
 public export
-boxIntersectionMass : Ord a => Carrier a -> Carrier a -> Nat
+boxIntersectionMass : Ord a => MSetBox a -> MSetBox a -> Nat
 boxIntersectionMass a b = boxToNat (totalMassBox (minBox a b))
 
 ||| Computes total union mass |A ∪ B| = sum max(w_A, w_B).
 public export
-boxUnionMass : Ord a => Carrier a -> Carrier a -> Nat
+boxUnionMass : Ord a => MSetBox a -> MSetBox a -> Nat
 boxUnionMass a b = boxToNat (totalMassBox (maxBox a b))
 
 ||| Multiset Symmetric Difference Information Distance.
 public export
-boxSymmetricDifference : Ord a => Carrier a -> Carrier a -> Nat
+boxSymmetricDifference : Ord a => MSetBox a -> MSetBox a -> Nat
 boxSymmetricDifference a b =
   let diff = subBox a b
   in foldBoxTreeL (\acc, (_, w) => acc + boxToNat (absBox w)) 0 diff
 
-||| Canonical inner product (DotStatic) between two Carrier k multisets in O(N log N) time.
+||| Canonical inner product (DotStatic) between two MSetBox k multisets in O(N log N) time.
 public export
-dotCarrier : DiscreteCoord k => Carrier k -> Carrier k -> BoxInt
-dotCarrier = dotBox
+dotMSet : DiscreteCoord k => MSetBox k -> MSetBox k -> BoxInt
+dotMSet = dotBox
 
-||| Cartesian outer product (OuterM): Carrier k1 -> Carrier k2 -> Carrier (k1, k2).
 public export
-outerCarrier : (DiscreteCoord k1, DiscreteCoord k2) => Carrier k1 -> Carrier k2 -> Carrier (k1, k2)
-outerCarrier = tensorBox
+dotCarrier : DiscreteCoord k => MSetBox k -> MSetBox k -> BoxInt
+dotCarrier = dotMSet
+
+||| Cartesian outer product (OuterM): MSetBox k1 -> MSetBox k2 -> MSetBox (k1, k2).
+public export
+outerMSet : (DiscreteCoord k1, DiscreteCoord k2) => MSetBox k1 -> MSetBox k2 -> MSetBox (k1, k2)
+outerMSet = tensorBox
+
+public export
+outerCarrier : (DiscreteCoord k1, DiscreteCoord k2) => MSetBox k1 -> MSetBox k2 -> MSetBox (k1, k2)
+outerCarrier = outerMSet
 
 ||| Right index contraction / marginalization (ContractR):
-||| Sums out k2 to project Carrier (k1, k2) -> Carrier k1 (relational GROUP BY k1).
+||| Sums out k2 to project MSetBox (k1, k2) -> MSetBox k1 (relational GROUP BY k1).
 public export
-contractR : PairCoord k1 k2 => Carrier (k1, k2) -> Carrier k1
+contractR : PairCoord k1 k2 => MSetBox (k1, k2) -> MSetBox k1
 contractR = contractRBox
 
 ||| Left index contraction / marginalization (ContractL):
-||| Sums out k1 to project Carrier (k1, k2) -> Carrier k2 (relational GROUP BY k2).
+||| Sums out k1 to project MSetBox (k1, k2) -> MSetBox k2 (relational GROUP BY k2).
 public export
-contractL : PairCoord k1 k2 => Carrier (k1, k2) -> Carrier k2
+contractL : PairCoord k1 k2 => MSetBox (k1, k2) -> MSetBox k2
 contractL = contractLBox
 
-||| Coordinate pushforward (f_* / aggregate): re-indexes a Carrier k1 along f : k1 -> k2,
+||| Coordinate pushforward (f_* / aggregate): re-indexes an MSetBox k1 along f : k1 -> k2,
 ||| summing multiplicities of colliding coordinates in k2.
 public export
-pushforwardCarrier : DiscreteCoord k2 => (k1 -> k2) -> Carrier k1 -> Carrier k2
-pushforwardCarrier = mapBox
+pushforwardMSet : DiscreteCoord k2 => (k1 -> k2) -> MSetBox k1 -> MSetBox k2
+pushforwardMSet = mapBox
+
+public export
+pushforwardCarrier : DiscreteCoord k2 => (k1 -> k2) -> MSetBox k1 -> MSetBox k2
+pushforwardCarrier = pushforwardMSet
 
 ||| Pair coordinate transposition: swaps (a, b) -> (b, a).
 public export
-transposeCarrier : (DiscreteCoord a, DiscreteCoord b) => Carrier (a, b) -> Carrier (b, a)
-transposeCarrier = transposeBox
+transposeMSet : (DiscreteCoord a, DiscreteCoord b) => MSetBox (a, b) -> MSetBox (b, a)
+transposeMSet = transposeBox
+
+public export
+transposeCarrier : (DiscreteCoord a, DiscreteCoord b) => MSetBox (a, b) -> MSetBox (b, a)
+transposeCarrier = transposeMSet
 
 ||| Pixel-fusion multiset contraction: [a, b1] * [b2, c] -> [a, c] where b1 == b2.
 public export
+composeMSet : (DiscreteCoord a, DiscreteCoord b, DiscreteCoord c) =>
+              MSetBox (a, b) -> MSetBox (b, c) -> MSetBox (a, c)
+composeMSet = composeBox
+
+public export
 composeCarrier : (DiscreteCoord a, DiscreteCoord b, DiscreteCoord c) =>
-                 Carrier (a, b) -> Carrier (b, c) -> Carrier (a, c)
-composeCarrier = composeBox
+                 MSetBox (a, b) -> MSetBox (b, c) -> MSetBox (a, c)
+composeCarrier = composeMSet
 
 ||| Trace of a square 2D multiset: sums multiplicities on the diagonal a1 == a2.
 public export
-traceCarrier : DiscreteCoord a => Carrier (a, a) -> BoxInt
-traceCarrier = traceBox
+traceMSet : DiscreteCoord a => MSetBox (a, a) -> BoxInt
+traceMSet = traceBox
+
+public export
+traceCarrier : DiscreteCoord a => MSetBox (a, a) -> BoxInt
+traceCarrier = traceMSet
 
 ||| Diagonal projection mask: retains only entries on the coincidence diagonal a1 == a2.
 public export
-diagMaskCarrier : DiscreteCoord a => Carrier (a, a) -> Carrier (a, a)
-diagMaskCarrier = diagMaskBox
+diagMaskMSet : DiscreteCoord a => MSetBox (a, a) -> MSetBox (a, a)
+diagMaskMSet = diagMaskBox
+
+public export
+diagMaskCarrier : DiscreteCoord a => MSetBox (a, a) -> MSetBox (a, a)
+diagMaskCarrier = diagMaskMSet
 
 ||| Partial contraction / reduced composite multiset: M * M^T.
 public export
 maxelReducedDensity : (DiscreteCoord a, DiscreteCoord b) =>
-                      Carrier (a, b) -> Carrier (a, a)
-maxelReducedDensity m = composeCarrier m (transposeCarrier m)
+                      MSetBox (a, b) -> MSetBox (a, a)
+maxelReducedDensity m = composeMSet m (transposeMSet m)
 
 ||| Bipartite contraction norms: returns (Tr((M * M^T)^2), ||M||_2^4).
 public export
 maxelTraceSquare : (DiscreteCoord a, DiscreteCoord b) =>
-                   Carrier (a, b) -> (BoxInt, BoxInt)
+                   MSetBox (a, b) -> (BoxInt, BoxInt)
 maxelTraceSquare m =
-  let q2     = dotCarrier m m
+  let q2     = dotMSet m m
       rho    = maxelReducedDensity m
-      trRho2 = dotCarrier rho rho
+      trRho2 = dotMSet rho rho
   in (trRho2, q2 * q2)
 
 public export
-buildOneCarrier : {0 k : Type} -> FiniteCoord k
-               => (rem : Nat) -> (acc : Carrier k) -> Carrier k
-buildOneCarrier Z     acc = acc
-buildOneCarrier (S r) acc = case isLT r (cardinality {k}) of
-  Yes lt => buildOneCarrier r (setBoxTree (fromIndex (natToFinLT r @{lt})) (intToBoxInt 1) acc)
+buildOneMSet : {0 k : Type} -> FiniteCoord k
+            => (rem : Nat) -> (acc : MSetBox k) -> MSetBox k
+buildOneMSet Z     acc = acc
+buildOneMSet (S r) acc = case isLT r (cardinality {k}) of
+  Yes lt => buildOneMSet r (setBoxTree (fromIndex (natToFinLT r @{lt})) (intToBoxInt 1) acc)
   No _   => acc
 
-||| Universal identity mask (OneM) assigning weight 1 to every coordinate in `FiniteCoord k`.
 public export
-oneCarrier : {0 k : Type} -> FiniteCoord k => Carrier k
-oneCarrier = buildOneCarrier (cardinality {k}) BoxLeaf
+buildOneCarrier : {0 k : Type} -> FiniteCoord k
+               => (rem : Nat) -> (acc : MSetBox k) -> MSetBox k
+buildOneCarrier = buildOneMSet
 
-||| Cauchy convolution (MulStatic) on Carrier k over any MonoidCoord k.
+||| Universal identity mask (OneM) assigning multiplicity 1 to every coordinate in `FiniteCoord k`.
 public export
-mulCarrier : MonoidCoord k => Carrier k -> Carrier k -> Carrier k
-mulCarrier = mulBoxWith
+oneMSet : {0 k : Type} -> FiniteCoord k => MSetBox k
+oneMSet = buildOneMSet (cardinality {k}) BoxLeaf
 
 public export
-convCarrier : MonoidCoord k => Carrier k -> Carrier k -> Carrier k
-convCarrier = mulCarrier
+oneCarrier : {0 k : Type} -> FiniteCoord k => MSetBox k
+oneCarrier = oneMSet
+
+||| Cauchy convolution (MulStatic) on MSetBox k over any MonoidCoord k.
+public export
+mulMSet : MonoidCoord k => MSetBox k -> MSetBox k -> MSetBox k
+mulMSet = mulBoxWith
+
+public export
+mulCarrier : MonoidCoord k => MSetBox k -> MSetBox k -> MSetBox k
+mulCarrier = mulMSet
+
+public export
+convMSet : MonoidCoord k => MSetBox k -> MSetBox k -> MSetBox k
+convMSet = mulMSet
+
+public export
+convCarrier : MonoidCoord k => MSetBox k -> MSetBox k -> MSetBox k
+convCarrier = mulMSet
 
 ||| Filters a Multiset c a by a predicate on its elements.
 public export
@@ -466,43 +558,51 @@ filterMultiset p (AddM k v rest) =
   if p k then AddM k v (filterMultiset p rest) else filterMultiset p rest
 
 ------------------------------------------------------------------------
--- CANONICAL CARRIER STOICHIOMETRIC REACTIONS & DIFFERENCES
+-- CANONICAL MULTISET STOICHIOMETRIC REACTIONS & DIFFERENCES
 ------------------------------------------------------------------------
 
-||| Bounded Carrier Difference (Monus): (M1 \ M2)(x) = max(0, M1(x) - M2(x)).
+||| Bounded Multiset Difference (Monus): (M1 \ M2)(x) = max(0, M1(x) - M2(x)).
 public export
-boundedDiffCarrier : DiscreteCoord k => Carrier k -> Carrier k -> Carrier k
-boundedDiffCarrier m1 m2 =
+boundedDiffMSet : DiscreteCoord k => MSetBox k -> MSetBox k -> MSetBox k
+boundedDiffMSet m1 m2 =
   foldBoxTreeL (\acc, (x, w1) =>
-    let w2 = lookupCarrier x m2
+    let w2 = lookupMSet x m2
         remW = Stage0.BoxInt.subBox w1 w2
     in if remW > intToBoxInt 0 then setBoxTree x remW acc else acc) BoxLeaf m1
 
-||| Carrier Symmetric Difference: (M1 Δ M2)(x) = |M1(x) - M2(x)|.
 public export
-symmetricDiffCarrier : DiscreteCoord k => Carrier k -> Carrier k -> Carrier k
-symmetricDiffCarrier m1 m2 =
+boundedDiffCarrier : DiscreteCoord k => MSetBox k -> MSetBox k -> MSetBox k
+boundedDiffCarrier = boundedDiffMSet
+
+||| Multiset Symmetric Difference: (M1 Δ M2)(x) = |M1(x) - M2(x)|.
+public export
+symmetricDiffMSet : DiscreteCoord k => MSetBox k -> MSetBox k -> MSetBox k
+symmetricDiffMSet m1 m2 =
   let diff1 = foldBoxTreeL (\acc, (x, w1) =>
-                let w2 = lookupCarrier x m2
+                let w2 = lookupMSet x m2
                     d = absBox (Stage0.BoxInt.subBox w1 w2)
                 in if boxIsNonZero d then setBoxTree x d acc else acc) BoxLeaf m1
   in foldBoxTreeL (\acc, (x, w2) =>
-       if boxIsNonZero (lookupCarrier x m1)
+       if boxIsNonZero (lookupMSet x m1)
          then acc
          else let d = absBox w2
               in if boxIsNonZero d then setBoxTree x d acc else acc) diff1 m2
 
-||| Computes the stoichiometric reaction quotient on indexed Carriers:
+public export
+symmetricDiffCarrier : DiscreteCoord k => MSetBox k -> MSetBox k -> MSetBox k
+symmetricDiffCarrier = symmetricDiffMSet
+
+||| Computes the stoichiometric reaction quotient on indexed multisets:
 ||| maximum number of times `reactants` is contained in `state`.
 public export
-reactionQuotientCarrier : DiscreteCoord k => (reactants : Carrier k) -> Carrier k -> BoxInt
-reactionQuotientCarrier BoxLeaf _ = intToBoxInt 0
-reactionQuotientCarrier _ BoxLeaf = intToBoxInt 0
-reactionQuotientCarrier reactants state =
+reactionQuotientMSet : DiscreteCoord k => (reactants : MSetBox k) -> MSetBox k -> BoxInt
+reactionQuotientMSet BoxLeaf _ = intToBoxInt 0
+reactionQuotientMSet _ BoxLeaf = intToBoxInt 0
+reactionQuotientMSet reactants state =
   let res = foldBoxTreeL (\mMin, (x, w) =>
               if w <= intToBoxInt 0
                 then mMin
-                else let q = divBox (lookupCarrier x state) w
+                else let q = divBox (lookupMSet x state) w
                          qClamped = if q < intToBoxInt 0 then intToBoxInt 0 else q
                      in case mMin of
                           Nothing => Just qClamped
@@ -512,74 +612,119 @@ reactionQuotientCarrier reactants state =
        Nothing => intToBoxInt 0
        Just q => q
 
+public export
+reactionQuotientCarrier : DiscreteCoord k => (reactants : MSetBox k) -> MSetBox k -> BoxInt
+reactionQuotientCarrier = reactionQuotientMSet
+
 ||| Executes up to `maxReactions` stoichiometric reactions (`reactants -> products`)
-||| on an indexed `Carrier k` state: `state' = (state \ (k * reactants)) <+> (k * products)`.
+||| on an indexed `MSetBox k` state: `state' = (state \ (k * reactants)) <+> (k * products)`.
 ||| Returns `(updatedState, actualReactionsExecuted)`.
 public export
-reactCarrierBox :
+reactMSetBox :
   DiscreteCoord k =>
   (maxReactions : BoxInt) ->
-  (reactants : Carrier k) ->
-  (products : Carrier k) ->
-  Carrier k ->
-  (Carrier k, BoxInt)
-reactCarrierBox maxReactions reactants products state =
+  (reactants : MSetBox k) ->
+  (products : MSetBox k) ->
+  MSetBox k ->
+  (MSetBox k, BoxInt)
+reactMSetBox maxReactions reactants products state =
   if maxReactions <= intToBoxInt 0
     then (state, intToBoxInt 0)
     else case state of
            BoxLeaf => (state, intToBoxInt 0)
            _ =>
-             let avail = reactionQuotientCarrier reactants state
+             let avail = reactionQuotientMSet reactants state
                  k = if maxReactions < avail then maxReactions else avail
              in if k <= intToBoxInt 0
                   then (state, intToBoxInt 0)
-                  else let consumed = scaleCarrier k reactants
-                           produced = scaleCarrier k products
-                           remState = boundedDiffCarrier state consumed
-                           nextState = addCarrier remState produced
+                  else let consumed = scaleMSet k reactants
+                           produced = scaleMSet k products
+                           remState = boundedDiffMSet state consumed
+                           nextState = addMSet remState produced
                        in (nextState, k)
 
-||| Cross-tier stoichiometric transmutation (`reactants` in `Carrier k1` -> `products` in `Carrier k2`):
+public export
+reactCarrierBox :
+  DiscreteCoord k =>
+  (maxReactions : BoxInt) ->
+  (reactants : MSetBox k) ->
+  (products : MSetBox k) ->
+  MSetBox k ->
+  (MSetBox k, BoxInt)
+reactCarrierBox = reactMSetBox
+
+||| Cross-tier stoichiometric transmutation (`reactants` in `MSetBox k1` -> `products` in `MSetBox k2`):
 ||| Consumes `k * reactants` from `sourceState` and adds `k * products` to `targetState`.
 ||| Returns `(nextSourceState, nextTargetState, actualReactionsExecuted)`.
 public export
-transmuteCarrier :
+transmuteMSet :
   (DiscreteCoord k1, DiscreteCoord k2) =>
   (maxReactions : BoxInt) ->
-  (reactants : Carrier k1) ->
-  (products : Carrier k2) ->
-  Carrier k1 ->
-  Carrier k2 ->
-  (Carrier k1, Carrier k2, BoxInt)
-transmuteCarrier maxReactions reactants products sourceState targetState =
+  (reactants : MSetBox k1) ->
+  (products : MSetBox k2) ->
+  MSetBox k1 ->
+  MSetBox k2 ->
+  (MSetBox k1, MSetBox k2, BoxInt)
+transmuteMSet maxReactions reactants products sourceState targetState =
   if maxReactions <= intToBoxInt 0
     then (sourceState, targetState, intToBoxInt 0)
     else case sourceState of
            BoxLeaf => (sourceState, targetState, intToBoxInt 0)
            _ =>
-             let avail = reactionQuotientCarrier reactants sourceState
+             let avail = reactionQuotientMSet reactants sourceState
                  k = if maxReactions < avail then maxReactions else avail
              in if k <= intToBoxInt 0
                   then (sourceState, targetState, intToBoxInt 0)
-                  else let consumed = scaleCarrier k reactants
-                           produced = scaleCarrier k products
-                           nextSource = boundedDiffCarrier sourceState consumed
-                           nextTarget = addCarrier targetState produced
+                  else let consumed = scaleMSet k reactants
+                           produced = scaleMSet k products
+                           nextSource = boundedDiffMSet sourceState consumed
+                           nextTarget = addMSet targetState produced
                        in (nextSource, nextTarget, k)
 
-||| Splits a signed `Carrier k` into disjoint positive (`M_+`) and negative (`M_-`) channels,
-||| with positive weights in each channel: `posBox` has entries with `w > 0`, `negBox` has `-w` for `w < 0`.
 public export
-splitCarrierChannels : DiscreteCoord k => Carrier k -> (Carrier k, Carrier k)
-splitCarrierChannels = splitBoxChannels
+transmuteCarrier :
+  (DiscreteCoord k1, DiscreteCoord k2) =>
+  (maxReactions : BoxInt) ->
+  (reactants : MSetBox k1) ->
+  (products : MSetBox k2) ->
+  MSetBox k1 ->
+  MSetBox k2 ->
+  (MSetBox k1, MSetBox k2, BoxInt)
+transmuteCarrier = transmuteMSet
 
-||| Sum of signed weights in a `Carrier k`: \sum w_i
+||| Splits a signed `MSetBox k` into disjoint positive (`M_+`) and negative (`M_-`) channels,
+||| with positive multiplicities in each channel: `posBox` has entries with `w > 0`, `negBox` has `-w` for `w < 0`.
 public export
-carrierSignedSum : Carrier k -> Integer
-carrierSignedSum = foldBox (\_, w, acc => acc + unwrapBox w) 0
+splitMSetChannels : DiscreteCoord k => MSetBox k -> (MSetBox k, MSetBox k)
+splitMSetChannels = splitBoxChannels
 
-||| L1 norm (total absolute weight) in a `Carrier k`: \sum |w_i|
 public export
-carrierL1 : Carrier k -> Integer
-carrierL1 = foldBox (\_, w, acc => acc + abs (unwrapBox w)) 0
+splitCarrierChannels : DiscreteCoord k => MSetBox k -> (MSetBox k, MSetBox k)
+splitCarrierChannels = splitMSetChannels
+
+||| Sum of signed multiplicities in an `MSetBox k`: \sum w_i
+public export
+multiplicitySignedSum : MSetBox k -> Integer
+multiplicitySignedSum = foldBox (\_, w, acc => acc + unwrapBox w) 0
+
+public export
+msetSignedSum : MSetBox k -> Integer
+msetSignedSum = multiplicitySignedSum
+
+public export
+carrierSignedSum : MSetBox k -> Integer
+carrierSignedSum = multiplicitySignedSum
+
+||| L1 norm (total absolute multiplicity) in an `MSetBox k`: \sum |w_i|
+public export
+multiplicityL1 : MSetBox k -> Integer
+multiplicityL1 = foldBox (\_, w, acc => acc + abs (unwrapBox w)) 0
+
+public export
+msetL1 : MSetBox k -> Integer
+msetL1 = multiplicityL1
+
+public export
+carrierL1 : MSetBox k -> Integer
+carrierL1 = multiplicityL1
 

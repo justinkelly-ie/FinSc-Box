@@ -160,11 +160,11 @@ public export
 infixl 7 ><
 
 ------------------------------------------------------------------------
--- Multiplicity Weight & Carrier-Parameterised Multiset Algebra
+-- Multiplicity & Parameterised Multiset Algebra
 ------------------------------------------------------------------------
 
-||| Algebraic interface required for any multiplicity carrier `c` (`BoxInt`,
-||| `SignedBit`, `MultisetBit`) to drive `Box c k` and `HereditaryMSet c`.
+||| Algebraic interface required for any discrete multiplicity `c` (`BoxInt`,
+||| `SignedBit`, `MultisetBit`) to drive `MSet c k` (`Box c k`) and `HereditaryMSet c`.
 public export
 interface Ord c => MultisetWeight c where
   zeroWeight : c
@@ -178,7 +178,12 @@ interface Ord c => MultisetWeight c where
   weightMagnitude : c -> Nat
   weightMagnitude w = if isZero w then 0 else 1
 
-||| Subtraction on any `MultisetWeight c` (`x + (-y)`).
+||| Canonical Triad alias for discrete multiplicity types (`BoxInt`, `SignedBit`, `MultisetBit`).
+public export
+Multiplicity : Type -> Type
+Multiplicity = MultisetWeight
+
+||| Subtraction on any `Multiplicity c` (`x + (-y)`).
 public export
 subWeight : MultisetWeight c => c -> c -> c
 subWeight x y = addWeight x (negWeight y)
@@ -195,11 +200,16 @@ MultisetWeight BoxInt where
   maxWeight  = Stage0.BoxInt.maxBox
   weightMagnitude (MkBoxInt w) = integerToNat (abs w)
 
-||| Defines how a multiplicity carrier `c` peels off one positive (`Left`)
+||| Defines how a multiplicity `c` peels off one positive (`Left`)
 ||| or negative (`Right`) quantum at a time.
 public export
 interface MultisetWeight c => QuantumCarrier c where
   peelQuantum : c -> Maybe (Either c c)
+
+||| Canonical Triad alias for quantum-peelable multiplicity types.
+public export
+QuantumMultiplicity : Type -> Type
+QuantumMultiplicity = QuantumCarrier
 
 public export
 QuantumCarrier BoxInt where
@@ -208,8 +218,8 @@ QuantumCarrier BoxInt where
     else if w < 0 then Just (Right (intToBoxInt (w + 1)))
     else Nothing
 
-||| Carrier-parameterised multiset algebra generalizing `MultisetAlgebra`
-||| beyond fixed `BoxInt` weights to any `MultisetWeight c` (`SignedBit`,
+||| Multiplicity-parameterised multiset algebra generalizing `MultisetAlgebra`
+||| beyond fixed `BoxInt` multiplicities to any `Multiplicity c` (`SignedBit`,
 ||| `MultisetBit`, `BoxInt`). `| a` determines `c` uniquely for overload resolution.
 public export
 interface MultisetWeight c => WeightedMultisetAlgebra c a | a where

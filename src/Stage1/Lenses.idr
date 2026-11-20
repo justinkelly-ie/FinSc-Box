@@ -78,15 +78,15 @@ inverseLens (MkRotationLens p) =
 ||| Samples field density at point v through the observer frame in O(log N)
 ||| by querying the underlying multiset at the inverse-rotated coordinate R^{-1}(v).
 public export
-lookupWithLens : RotationLens -> Vect 3 BoxInt -> Carrier (Vect 3 BoxInt) -> BoxInt
+lookupWithLens : RotationLens -> Vect 3 BoxInt -> MSetBox (Vect 3 BoxInt) -> BoxInt
 lookupWithLens (MkRotationLens p) v m =
   lookupBox (rotateVectorScaled (inverseProportion p) v) m
 
 ||| Deferred Active Materialization:
-||| Pushes the underlying multiset forward into a new canonical Carrier
+||| Pushes the underlying multiset forward into a new canonical MSetBox
 ||| when, and only when, an actual physical state or particle freeze-out is required.
 public export
-materializeWithLens : RotationLens -> Carrier (Vect 3 BoxInt) -> Carrier (Vect 3 BoxInt)
+materializeWithLens : RotationLens -> MSetBox (Vect 3 BoxInt) -> MSetBox (Vect 3 BoxInt)
 materializeWithLens (MkRotationLens p) m =
   pushforwardRotation3 p m
 

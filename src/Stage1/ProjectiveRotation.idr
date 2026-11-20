@@ -175,8 +175,8 @@ public export
 ||| Active physical pushforward of a 3D coordinate multiset along a projective rotation proportion.
 ||| Computes M' = R_*(M) = \sum c_i [R(v_i)]. Colliding points sum their multiplicities.
 public export
-pushforwardRotation3 : ProjectiveProportion -> Carrier (Vect 3 BoxInt) -> Carrier (Vect 3 BoxInt)
-pushforwardRotation3 p = pushforwardCarrier (rotateVectorScaled p)
+pushforwardRotation3 : ProjectiveProportion -> MSetBox (Vect 3 BoxInt) -> MSetBox (Vect 3 BoxInt)
+pushforwardRotation3 p = pushforwardMSet (rotateVectorScaled p)
 
 ------------------------------------------------------------------------
 -- 5. PASSIVE ROTATED MULTISET OBSERVER VIEW
@@ -184,15 +184,23 @@ pushforwardRotation3 p = pushforwardCarrier (rotateVectorScaled p)
 
 ||| Passive observer view over a 3D multiset under a projective rotation proportion.
 public export
-record RotatedCarrierView where
-  constructor MkRotatedCarrierView
+record RotatedMSetView where
+  constructor MkRotatedMSetView
   proportion : ProjectiveProportion
-  baseState  : Carrier (Vect 3 BoxInt)
+  baseState  : MSetBox (Vect 3 BoxInt)
+
+public export
+RotatedCarrierView : Type
+RotatedCarrierView = RotatedMSetView
 
 ||| Zero-allocation coordinate lookup through the rotated frame:
 ||| Queries the base multiset at the inverse rotated coordinate.
 public export
-lookupRotatedCarrier : ProjectiveProportion -> Vect 3 BoxInt -> Carrier (Vect 3 BoxInt) -> BoxInt
-lookupRotatedCarrier p v m =
+lookupRotatedMSet : ProjectiveProportion -> Vect 3 BoxInt -> MSetBox (Vect 3 BoxInt) -> BoxInt
+lookupRotatedMSet p v m =
   lookupBox (rotateVectorScaled (inverseProportion p) v) m
+
+public export
+lookupRotatedCarrier : ProjectiveProportion -> Vect 3 BoxInt -> MSetBox (Vect 3 BoxInt) -> BoxInt
+lookupRotatedCarrier = lookupRotatedMSet
 
