@@ -14,10 +14,10 @@ modules = Stage0.BoxInt
         , Stage1.ConvolutionAdmissibility
         , Stage1.Views
         , Stage1.Lenses
-        , Stage1.Basis.CoordCell
-        , Stage1.Carrier.CellMultiset
+        , Stage1.Basis.Space
         , Stage1.Carrier.Vexel
         , Stage1.Carrier.Maxel
+        , Stage1.Carrier.Voxel
         , Stage1.Carrier.Boxel
         , Stage1.ProjectiveRotation
         , FinScBox.BoxInt
@@ -25,8 +25,7 @@ modules = Stage0.BoxInt
         , FinScBox.Box
         , FinScBox.HereditaryMSet
         , FinScBox.Multiset
-        , FinScBox.CoordCell
-        , FinScBox.CellMultiset
+        , FinScBox.Space
         , FinScBox.ConvolutionAdmissibility
         , FinScBox.ProjectiveRotation
         , FinScBox.Views

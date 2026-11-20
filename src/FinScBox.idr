@@ -8,8 +8,7 @@ import public Stage0.Multiset
 import public Stage1.ConvolutionAdmissibility
 import public Stage1.Views
 import public Stage1.Lenses
-import public Stage1.Basis.CoordCell
-import public Stage1.Carrier.CellMultiset
+import public Stage1.Basis.Space
 import public Stage1.ProjectiveRotation
 
 %default total
