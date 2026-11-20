@@ -189,6 +189,38 @@ public export
 liftSpaceStream : {dim : Nat} -> Nat -> SpaceStream t dim -> SpaceStream t (S dim)
 liftSpaceStream nextAxis = map (liftSpace nextAxis)
 
+||| Coordinate pushforward across a live `MSetBoxStream`:
+||| Re-indexes every yielded multiset along `f : k1 -> k2` (`pushforwardMSet f`),
+||| summing colliding multiplicities and automatically promoting any annihilated
+||| `BoxLeaf` tick to `StreamSkip` so it consumes zero `GohFuel`!
+public export
+pushforwardMSetStream : DiscreteCoord k2 =>
+                        (k1 -> k2) ->
+                        MSetBoxStream t k1 ->
+                        MSetBoxStream t k2
+pushforwardMSetStream f (MkTimeStream start at) =
+  MkTimeStream start (\n =>
+    case at n of
+      StreamDone    => StreamDone
+      StreamSkip    => StreamSkip
+      StreamYield m =>
+        let pushed = pushforwardMSet f m
+        in case pushed of
+             BoxLeaf => StreamSkip
+             _       => StreamYield pushed)
+
+||| 120-degree cyclic 3D rotation of a `VoxelSite` (`(x, y, z) -> (z, x, y)`)
+||| around the diagonal axis `(1, 1, 1)` (Wildberger's projective proportion `[1 : 1 : 1 : 1]`).
+public export
+cycleVoxelSite : VoxelSite -> VoxelSite
+cycleVoxelSite (ConsSite x (ConsSite y (ConsSite z PointSite))) =
+  mkVoxelSite z x y
+
+||| Active 3D rotational pushforward across a live `VoxelStream`.
+public export
+rotateVoxelStream : (VoxelSite -> VoxelSite) -> VoxelStream t -> VoxelStream t
+rotateVoxelStream = pushforwardMSetStream
+
 ------------------------------------------------------------------------
 -- 4. FUEL EXHAUSTION & TIME-HORIZON FREEZE-OUT (`SolidifiedStream`)
 ------------------------------------------------------------------------
