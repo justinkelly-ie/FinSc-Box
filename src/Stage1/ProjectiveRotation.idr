@@ -2,6 +2,9 @@ module Stage1.ProjectiveRotation
 
 import Data.Vect
 import Stage0.BoxInt
+import Stage0.Interfaces
+import Stage0.Box
+import Stage0.Multiset
 
 %default total
 
@@ -161,3 +164,35 @@ public export
        rhs2 = 4 * (sNum * sNum * sNum) * sDen         -- 4 * 27 * 4  = 432
    in lhs == rhs1 + rhs2) = True
 prfTripleSpreadEquilateral = Refl
+
+------------------------------------------------------------------------
+-- 4. PUSHFORWARD ROTATION OVER 3D MULTISETS
+------------------------------------------------------------------------
+
+public export
+{n : Nat} -> Ord a => DiscreteCoord (Vect n a) where
+
+||| Active physical pushforward of a 3D coordinate multiset along a projective rotation proportion.
+||| Computes M' = R_*(M) = \sum c_i [R(v_i)]. Colliding points sum their multiplicities.
+public export
+pushforwardRotation3 : ProjectiveProportion -> Carrier (Vect 3 BoxInt) -> Carrier (Vect 3 BoxInt)
+pushforwardRotation3 p = pushforwardCarrier (rotateVectorScaled p)
+
+------------------------------------------------------------------------
+-- 5. PASSIVE ROTATED MULTISET OBSERVER VIEW
+------------------------------------------------------------------------
+
+||| Passive observer view over a 3D multiset under a projective rotation proportion.
+public export
+record RotatedCarrierView where
+  constructor MkRotatedCarrierView
+  proportion : ProjectiveProportion
+  baseState  : Carrier (Vect 3 BoxInt)
+
+||| Zero-allocation coordinate lookup through the rotated frame:
+||| Queries the base multiset at the inverse rotated coordinate.
+public export
+lookupRotatedCarrier : ProjectiveProportion -> Vect 3 BoxInt -> Carrier (Vect 3 BoxInt) -> BoxInt
+lookupRotatedCarrier p v m =
+  lookupBox (rotateVectorScaled (inverseProportion p) v) m
+
