@@ -209,17 +209,27 @@ pushforwardMSetStream f (MkTimeStream start at) =
              BoxLeaf => StreamSkip
              _       => StreamYield pushed)
 
-||| Equilateral spread s = 3/4 cyclic 3D rotation of a `VoxelSite` (`(x, y, z) -> (z, x, y)`)
+||| 120-degree / equilateral spread s = 3/4 cyclic 3D rotation of a `VoxelSite` (`(x, y, z) -> (z, x, y)`)
 ||| around the diagonal axis `(1, 1, 1)` (Wildberger's projective proportion `[1 : 1 : 1 : 1]`).
 public export
-cycleVoxelSite : VoxelSite -> VoxelSite
-cycleVoxelSite (ConsSite x (ConsSite y (ConsSite z PointSite))) =
+CycleVoxelSite : VoxelSite -> VoxelSite
+CycleVoxelSite (ConsSite x (ConsSite y (ConsSite z PointSite))) =
   mkVoxelSite z x y
+
+public export
+cycleVoxelSite : VoxelSite -> VoxelSite
+cycleVoxelSite = CycleVoxelSite
 
 ||| Active 3D rotational pushforward across a live `VoxelStream`.
 public export
 rotateVoxelStream : (VoxelSite -> VoxelSite) -> VoxelStream t -> VoxelStream t
 rotateVoxelStream = pushforwardMSetStream
+
+||| Temporal Pullback (f^*): unfolds a tick-fiber generator into an `MSetStream OpenFuture m k`,
+||| automatically promoting any annihilated `BoxLeaf` tick to `StreamSkip`.
+public export
+pullbackToStream : (start : Nat) -> (Nat -> MSet m k) -> MSetStream OpenFuture m k
+pullbackToStream = mkMSetStream
 
 ------------------------------------------------------------------------
 -- 4. FUEL EXHAUSTION & TIME-HORIZON FREEZE-OUT (`SolidifiedStream`)
@@ -339,3 +349,35 @@ freezeSpaceStream :
   SolidifiedStream (StaticTime (- cast g) (cast cap)) cap (Space dim)
 freezeSpaceStream g cap yieldBudget stepBudget strm =
   freezeMSetBoxStream g cap yieldBudget stepBudget strm
+
+||| Temporal Pushforward (f_*): collapses/freezes a `SpaceStream t dim` across time
+||| into a static `SolidifiedStream (StaticTime (- cast g) (cast cap)) cap (Space dim)`.
+public export
+pushforwardFromStream :
+  {dim : Nat} ->
+  {0 t : Time} ->
+  (g           : Nat) ->
+  (cap         : Nat) ->
+  (yieldBudget : Nat) ->
+  (stepBudget  : Nat) ->
+  SpaceStream t dim ->
+  SolidifiedStream (StaticTime (- cast g) (cast cap)) cap (Space dim)
+pushforwardFromStream = freezeSpaceStream
+
+||| Pushes a solidified relic multiset forward along a spatial map `f : k1 -> k2` (`R_*`).
+public export
+pushforwardRelicBy :
+  DiscreteCoord k2 =>
+  (k1 -> k2) ->
+  SolidifiedStream t cap (MSetBox k1) ->
+  SolidifiedStream t cap (MSetBox k2)
+pushforwardRelicBy f s = { relicState $= pushforwardMSet f } s
+
+||| Rotates a solidified spatial relic multiset along a coordinate symmetry `f` (`R_*`).
+public export
+rotateRelicBy :
+  {dim : Nat} ->
+  (SpaceCoord dim -> SpaceCoord dim) ->
+  SolidifiedStream t cap (Space dim) ->
+  SolidifiedStream t cap (Space dim)
+rotateRelicBy = pushforwardRelicBy

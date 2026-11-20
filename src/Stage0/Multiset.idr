@@ -453,6 +453,21 @@ public export
 pushforwardMSet : DiscreteCoord k2 => (k1 -> k2) -> MSetBox k1 -> MSetBox k2
 pushforwardMSet = mapBox
 
+||| Coordinate pullback (f^* / zoomInMSet): expands each coarse coordinate k1 into a fine
+||| multiset fiber MSetBox k2, scaling each fiber by the coarse site's multiplicity and summing.
+public export
+pullbackMSet : DiscreteCoord k2 => (k1 -> MSetBox k2) -> MSetBox k1 -> MSetBox k2
+pullbackMSet fiberFn m =
+  foldBox (\k1, w1, acc => addMSet acc (scaleMSet w1 (fiberFn k1))) emptyMSet m
+
+public export
+zoomOutMSet : DiscreteCoord k2 => (k1 -> k2) -> MSetBox k1 -> MSetBox k2
+zoomOutMSet = pushforwardMSet
+
+public export
+zoomInMSet : DiscreteCoord k2 => (k1 -> MSetBox k2) -> MSetBox k1 -> MSetBox k2
+zoomInMSet = pullbackMSet
+
 public export
 pushforwardCarrier : DiscreteCoord k2 => (k1 -> k2) -> MSetBox k1 -> MSetBox k2
 pushforwardCarrier = pushforwardMSet
