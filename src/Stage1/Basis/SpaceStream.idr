@@ -381,3 +381,14 @@ rotateRelicBy :
   SolidifiedStream t cap (Space dim) ->
   SolidifiedStream t cap (Space dim)
 rotateRelicBy = pushforwardRelicBy
+
+||| Final Sentence Verb (`YieldParticle` / `yieldParticle`):
+||| Extracts the solidified spatial multiset particle directly from a `SolidifiedStream`.
+||| Usage: `VacuumRoot |> unfoldAtLayer g |> freezeAtHorizon 12 |> YieldParticle`
+public export
+YieldParticle : SolidifiedStream t cap a -> a
+YieldParticle s = s.relicState
+
+public export
+yieldParticle : SolidifiedStream t cap a -> a
+yieldParticle = YieldParticle
