@@ -1,0 +1,36 @@
+package FinSc-Box
+version = 0.1.0
+authors = "Justin"
+brief   = "FinSc-Box: Minimal Hereditary Multiset & Spatial Box Engine"
+
+depends = base >= 0.8.0
+        , linear
+
+modules = Stage0.BoxInt
+        , Stage0.Interfaces
+        , Stage0.Box
+        , Stage0.HereditaryMSet
+        , Stage0.Multiset
+        , Stage1.ConvolutionAdmissibility
+        , Stage1.Views
+        , Stage1.Lenses
+        , Stage1.Basis.CoordCell
+        , Stage1.Carrier.CellMultiset
+        , Stage1.Carrier.Vexel
+        , Stage1.Carrier.Maxel
+        , Stage1.Carrier.Boxel
+        , Stage1.ProjectiveRotation
+        , FinScBox.BoxInt
+        , FinScBox.Interfaces
+        , FinScBox.Box
+        , FinScBox.HereditaryMSet
+        , FinScBox.Multiset
+        , FinScBox.CoordCell
+        , FinScBox.CellMultiset
+        , FinScBox.ConvolutionAdmissibility
+        , FinScBox.ProjectiveRotation
+        , FinScBox.Views
+        , FinScBox.Lenses
+        , FinScBox
+
+sourcedir = "src"

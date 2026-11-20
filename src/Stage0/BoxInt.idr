@@ -1,0 +1,217 @@
+module Stage0.BoxInt
+
+import Data.Nat
+import Data.Linear
+import public Data.DPair
+
+%default total
+
+------------------------------------------------------------------------
+-- 1. BOXINT SCALAR TYPE & MONOMORPHIC ARITHMETIC
+------------------------------------------------------------------------
+
+||| A BoxInt is a signed integer wrapped in a discrete box.
+||| It represents concrete particle counts, quadrances, and metric entries
+||| in Wildberger's Box Arithmetic.
+|||
+||| 2LTT Staging Operation: Lifting (⇑Int) - Lifts raw integer scalars into 0-defect discrete scalar space.
+public export
+record BoxInt where
+  constructor MkBoxInt
+  value : Integer
+
+||| 2LTT Staging Operation: Splicing (~t) - Extracts raw underlying Integer term from boxed representation.
+%inline public export
+unwrapBox : BoxInt -> Integer
+unwrapBox (MkBoxInt v) = v
+
+||| 2LTT Staging Operation: Lifting (⇑Int) - Lifts integer value into boxed discrete representation.
+%inline public export
+intToBoxInt : Integer -> BoxInt
+intToBoxInt n = MkBoxInt n
+
+%inline public export
+integerToBoxInt : Integer -> BoxInt
+integerToBoxInt n = MkBoxInt n
+
+%inline public export
+natToBoxInt : Nat -> BoxInt
+natToBoxInt n = MkBoxInt (natToInteger n)
+
+%inline public export
+addBox : BoxInt -> BoxInt -> BoxInt
+addBox (MkBoxInt a) (MkBoxInt b) = MkBoxInt (a + b)
+
+%inline public export
+subBox : BoxInt -> BoxInt -> BoxInt
+subBox (MkBoxInt a) (MkBoxInt b) = MkBoxInt (a - b)
+
+public export
+addBoxLinear : (1 a : BoxInt) -> (1 b : BoxInt) -> BoxInt
+addBoxLinear (MkBoxInt a) (MkBoxInt b) = MkBoxInt (a + b)
+
+public export
+subBoxLinear : (1 a : BoxInt) -> (1 b : BoxInt) -> BoxInt
+subBoxLinear (MkBoxInt a) (MkBoxInt b) = MkBoxInt (a - b)
+
+%inline public export
+mulBox : BoxInt -> BoxInt -> BoxInt
+mulBox (MkBoxInt a) (MkBoxInt b) = MkBoxInt (a * b)
+
+%inline public export
+boxEq : BoxInt -> BoxInt -> Bool
+boxEq (MkBoxInt a) (MkBoxInt b) = case a == b of True => True; False => False
+
+%inline public export
+boxLTE : BoxInt -> BoxInt -> Bool
+boxLTE (MkBoxInt a) (MkBoxInt b) = case a <= b of True => True; False => False
+
+%inline public export
+Num BoxInt where
+  (+) (MkBoxInt a) (MkBoxInt b) = MkBoxInt (a + b)
+  (*) (MkBoxInt a) (MkBoxInt b) = MkBoxInt (a * b)
+  fromInteger n = MkBoxInt n
+
+%inline public export
+negBox : BoxInt -> BoxInt
+negBox (MkBoxInt a) = MkBoxInt (-a)
+
+%inline public export
+Neg BoxInt where
+  negate (MkBoxInt a) = MkBoxInt (-a)
+  (-) (MkBoxInt a) (MkBoxInt b) = MkBoxInt (a - b)
+
+%inline public export
+divBox : BoxInt -> BoxInt -> BoxInt
+divBox (MkBoxInt a) (MkBoxInt b) = MkBoxInt (case b of 0 => 0; _ => assert_total (a `div` b))
+
+%inline public export
+modBox : BoxInt -> BoxInt -> BoxInt
+modBox (MkBoxInt a) (MkBoxInt b) = MkBoxInt (case b of 0 => 0; _ => assert_total (a `mod` b))
+
+public export
+Integral BoxInt where
+  div (MkBoxInt a) (MkBoxInt b) = MkBoxInt (case b of 0 => 0; _ => assert_total (a `div` b))
+  mod (MkBoxInt a) (MkBoxInt b) = MkBoxInt (case b of 0 => 0; _ => assert_total (a `mod` b))
+
+public export
+Abs BoxInt where
+  abs (MkBoxInt v) = MkBoxInt (case v < 0 of True => -v; False => v)
+
+public export
+Cast Nat BoxInt where
+  cast = natToBoxInt
+
+public export
+Cast Integer BoxInt where
+  cast = intToBoxInt
+
+||| Returns True if the BoxInt value is exactly zero.
+%inline public export
+boxIsZero : BoxInt -> Bool
+boxIsZero (MkBoxInt v) = v == 0
+
+||| Returns True if the BoxInt value is non-zero.
+%inline public export
+boxIsNonZero : BoxInt -> Bool
+boxIsNonZero (MkBoxInt v) = v /= 0
+
+||| Converts BoxInt to a strictly positive Nat (minimum 1), clamping values <= 0 to 1.
+||| Eliminates division-by-zero risks in physical denominator scales.
+public export
+boxIntToPositiveNat : BoxInt -> Nat
+boxIntToPositiveNat (MkBoxInt v) = if v <= 0 then 1 else integerToNat v
+
+||| Converts BoxInt to Nat, clamping negative values to 0.
+||| For absolute-value conversion use absBox first.
+public export
+boxToNat : BoxInt -> Nat
+boxToNat (MkBoxInt v) = if v <= 0 then 0 else integerToNat v
+
+||| Canonical alias for boxToNat.
+public export
+boxIntToNat : BoxInt -> Nat
+boxIntToNat = boxToNat
+
+public export
+Cast BoxInt Nat where
+  cast = boxToNat
+
+||| Returns the absolute value of a BoxInt as a BoxInt.
+||| Does not go through boxToNat — safe for negative inputs.
+%inline public export
+absBox : BoxInt -> BoxInt
+absBox (MkBoxInt v) = MkBoxInt (if v < 0 then -v else v)
+
+%inline public export
+Eq BoxInt where
+  (MkBoxInt a) == (MkBoxInt b) = a == b
+
+public export
+Ord BoxInt where
+  compare (MkBoxInt a) (MkBoxInt b) = compare a b
+
+public export
+Show BoxInt where
+  show (MkBoxInt a) = "[" ++ show a ++ "]"
+
+%inline public export
+boxAdd : BoxInt -> BoxInt -> BoxInt
+boxAdd = addBox
+
+%inline public export
+boxSub : BoxInt -> BoxInt -> BoxInt
+boxSub = subBox
+
+%inline public export
+boxMult : BoxInt -> BoxInt -> BoxInt
+boxMult (MkBoxInt a) (MkBoxInt b) = MkBoxInt (a * b)
+
+%inline public export
+boxMul : BoxInt -> BoxInt -> BoxInt
+boxMul = mulBox
+
+%inline public export
+natToBox : Nat -> BoxInt
+natToBox = natToBoxInt
+
+------------------------------------------------------------------------
+-- 2. LATTICE MEET/JOIN & CONSTRUCTIVE NON-ZERO RECOGNIZER (`Dec`)
+------------------------------------------------------------------------
+
+||| Pointwise lattice meet (`min`) for tropical `/\` envelopes.
+%inline public export
+minBox : BoxInt -> BoxInt -> BoxInt
+minBox a b = if a <= b then a else b
+
+||| Pointwise lattice join (`max`) for tropical `\/` envelopes.
+%inline public export
+maxBox : BoxInt -> BoxInt -> BoxInt
+maxBox a b = if a >= b then a else b
+
+||| Constructive predicate witnessing that a `BoxInt` is non-zero.
+public export
+data IsNonZeroBox : BoxInt -> Type where
+  MkIsNonZero : {v : Integer} -> (0 prf : (v == 0) = False) -> IsNonZeroBox (MkBoxInt v)
+
+||| Constructive `Dec` recognizer replacing `Maybe`-returning `toNonZeroBoxInt`
+||| (per `recognition-rule.md`), yielding `Yes prf` or `No contra`.
+public export
+recognizeNonZeroBox : (b : BoxInt) -> Dec (IsNonZeroBox b)
+recognizeNonZeroBox (MkBoxInt v) with (v == 0) proof eq
+  recognizeNonZeroBox (MkBoxInt v) | False = Yes (MkIsNonZero eq)
+  recognizeNonZeroBox (MkBoxInt v) | True  =
+    No (\(MkIsNonZero prf) => absurd (trans (sym eq) prf))
+
+||| Erased-proof `Subset` alias for zero-overhead runtime storage of non-zero scalars.
+public export
+NonZeroBoxInt : Type
+NonZeroBoxInt = Subset BoxInt IsNonZeroBox
+
+||| Smart constructor returning `Maybe NonZeroBoxInt` backed by the `Dec` witness.
+public export
+toNonZeroBoxInt : (b : BoxInt) -> Maybe NonZeroBoxInt
+toNonZeroBoxInt b =
+  case recognizeNonZeroBox b of
+    Yes prf => Just (Element b prf)
+    No _    => Nothing
