@@ -200,33 +200,22 @@ record PythPairResult where
   valB : BoxInt
   valU : BoxInt
 
-||| Wildberger parametric Pythagorean `(m^2 - 1, 2m, m^2 + 1)` exact integer rotation
-||| on `(pA, pB, u)` for any `m >= 2`:
-|||   1. Preserves `pA + pB` identically.
-|||   2. Guarantees `2*(valA^2 + valB^2) + valU^2 <= 2*(pA^2 + pB^2) + u^2` unconditionally.
 public export
-rotatePythParam : (m, pA, pB, u : BoxInt) -> PythPairResult
-rotatePythParam m pA pB u =
-  let mVal  = if unwrapBox m < 2 then 2 else unwrapBox m
-      m2    = mVal * mVal
-      aCoef = m2 - 1
-      bCoef = 2 * mVal
-      rDen  = m2 + 1
-      sSum  = addBox pA pB
-      dDiff = subBox pB pA
-      numD  = MkBoxInt (aCoef * unwrapBox dDiff + bCoef * unwrapBox u)
-      numU  = MkBoxInt (aCoef * unwrapBox u     - bCoef * unwrapBox dDiff)
-      dRaw  = tdivPosBox numD rDen
-      uRaw  = tdivPosBox numU rDen
+sqPairBox : BoxInt -> BoxInt -> Integer
+sqPairBox (MkBoxInt d) (MkBoxInt v) = d * d + v * v
+
+public export
+pythFallbackPair : (sSum, numD, numU : BoxInt) -> (rDen : Integer) -> (BoxInt, BoxInt)
+pythFallbackPair sSum numD numU rDen =
+  let dRaw        = tdivPosBox numD rDen
+      uRaw        = tdivPosBox numU rDen
       oddMismatch = isOddBox dRaw /= isOddBox sSum
   in if not oddMismatch
-       then MkPythPairResult (tdiv2Box (subBox sSum dRaw)) (tdiv2Box (addBox sSum dRaw)) uRaw
+       then (dRaw, uRaw)
        else if dRaw > MkBoxInt 0
-         then let dNew = subBox dRaw (MkBoxInt 1)
-              in MkPythPairResult (tdiv2Box (subBox sSum dNew)) (tdiv2Box (addBox sSum dNew)) uRaw
+         then (subBox dRaw (MkBoxInt 1), uRaw)
          else if dRaw < MkBoxInt 0
-           then let dNew = addBox dRaw (MkBoxInt 1)
-                in MkPythPairResult (tdiv2Box (subBox sSum dNew)) (tdiv2Box (addBox sSum dNew)) uRaw
+           then (addBox dRaw (MkBoxInt 1), uRaw)
            else
              let dNew = if numD >= MkBoxInt 0 then MkBoxInt 1 else MkBoxInt (-1)
                  uNew = if boxIsZero numD
@@ -234,5 +223,69 @@ rotatePythParam m pA pB u =
                                else if uRaw < MkBoxInt 0 then addBox uRaw (MkBoxInt 1)
                                else uRaw
                           else uRaw
-             in MkPythPairResult (tdiv2Box (subBox sSum dNew)) (tdiv2Box (addBox sSum dNew)) uNew
+             in (dNew, uNew)
+
+public export
+pythChoosePair : (sSum, numD, numU : BoxInt) -> (rDen, eOld : Integer) -> (BoxInt, BoxInt)
+pythChoosePair sSum numD numU rDen eOld =
+  let dR          = rdivPosBox numD rDen
+      uR          = rdivPosBox numU rDen
+      oddMismatch = isOddBox dR /= isOddBox sSum
+  in if not oddMismatch
+       then if sqPairBox dR uR <= eOld
+              then (dR, uR)
+              else pythFallbackPair sSum numD numU rDen
+       else
+         let MkBoxInt dRV = dR
+             MkBoxInt nDV = numD
+             prod         = dRV * rDen
+         in if prod < nDV
+              then let d1 = addBox dR (MkBoxInt 1)
+                   in if sqPairBox d1 uR <= eOld
+                        then (d1, uR)
+                        else let d2 = subBox dR (MkBoxInt 1)
+                             in if sqPairBox d2 uR <= eOld
+                                  then (d2, uR)
+                                  else pythFallbackPair sSum numD numU rDen
+              else if prod > nDV
+                then let d1 = subBox dR (MkBoxInt 1)
+                     in if sqPairBox d1 uR <= eOld
+                          then (d1, uR)
+                          else let d2 = addBox dR (MkBoxInt 1)
+                               in if sqPairBox d2 uR <= eOld
+                                    then (d2, uR)
+                                    else pythFallbackPair sSum numD numU rDen
+                else
+                  let dC = if dRV > 0 then subBox dR (MkBoxInt 1)
+                           else if dRV < 0 then addBox dR (MkBoxInt 1)
+                           else if nDV >= 0 then MkBoxInt 1 else MkBoxInt (-1)
+                  in if sqPairBox dC uR <= eOld
+                       then (dC, uR)
+                       else pythFallbackPair sSum numD numU rDen
+
+||| Wildberger parametric Pythagorean `(m^2 - 1, 2m, m^2 + 1)` exact integer rotation
+||| on `(pA, pB, u)` for any `m >= 2`:
+|||   1. Preserves `pA + pB` identically.
+|||   2. Uses energy-guarded nearest-integer rounding (`rdivPosBox`) with exact Lyapunov
+|||      fallback to `tdivPosBox`, guaranteeing `2*(valA^2 + valB^2) + valU^2 <= 2*(pA^2 + pB^2) + u^2`.
+public export
+rotatePythParam : (m, pA, pB, u : BoxInt) -> PythPairResult
+rotatePythParam (MkBoxInt mIn) pA pB u =
+  let dDiff = subBox pB pA
+  in if boxIsZero dDiff && boxIsZero u
+       then MkPythPairResult pA pB u
+       else
+         let mVal          = if mIn < 2 then 2 else mIn
+             m2            = mVal * mVal
+             aCoef         = m2 - 1
+             bCoef         = 2 * mVal
+             rDen          = m2 + 1
+             sSum          = addBox pA pB
+             MkBoxInt dV   = dDiff
+             MkBoxInt uV   = u
+             numD          = MkBoxInt (aCoef * dV + bCoef * uV)
+             numU          = MkBoxInt (aCoef * uV - bCoef * dV)
+             eOld          = dV * dV + uV * uV
+             (dN, uN)      = pythChoosePair sSum numD numU rDen eOld
+         in MkPythPairResult (tdiv2Box (subBox sSum dN)) (tdiv2Box (addBox sSum dN)) uN
 

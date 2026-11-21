@@ -92,6 +92,18 @@ tdivPosBox (MkBoxInt v) den =
       then MkBoxInt (divIntegerPos v den)
       else MkBoxInt (-(divIntegerPos (-v) den))
 
+||| Symmetric nearest-integer division (half toward zero for even denominators,
+||| exact nearest integer for odd denominators) by a strictly positive integer (`assert_total`-free).
+public export
+rdivPosBox : BoxInt -> Integer -> BoxInt
+rdivPosBox (MkBoxInt v) den =
+  if den <= 0
+    then MkBoxInt 0
+    else let half = divIntegerPos (den - 1) 2
+         in if v >= 0
+              then MkBoxInt (divIntegerPos (v + half) den)
+              else MkBoxInt (-(divIntegerPos ((-v) + half) den))
+
 ||| Symmetric truncating division by 2 directly on signed `BoxInt` (`assert_total`-free).
 public export
 tdiv2Box : BoxInt -> BoxInt

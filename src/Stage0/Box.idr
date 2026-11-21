@@ -612,6 +612,60 @@ public export
 convolveStencil : (MonoidCoord k, MultisetWeight c) => Box c k -> Box c k -> Box c k
 convolveStencil = mulBoxWith
 
+||| Retains strictly entries whose magnitude meets `minCut` (for sparse series pruning).
+public export
+pruneMinBox : Ord k => Integer -> Box BoxInt k -> Box BoxInt k
+pruneMinBox minCut b =
+  if minCut <= 1
+    then b
+    else foldBox (\k, w@(MkBoxInt v), acc =>
+                    let mag = if v < 0 then -v else v
+                    in if mag >= minCut then setBox k w acc else acc)
+                 BoxLeaf b
+
+||| Divides all entries of a `Box BoxInt k` symmetrically by `den` and prunes values below `minCut`.
+public export
+scaleDivPruneBox : Ord k => (den, minCut : Integer) -> Box BoxInt k -> Box BoxInt k
+scaleDivPruneBox den minCut b =
+  if den <= 0
+    then BoxLeaf
+    else foldBox (\k, w, acc =>
+                    let q@(MkBoxInt qv) = tdivPosBox w den
+                        mag            = if qv < 0 then -qv else qv
+                    in if mag >= minCut && qv /= 0 then setBox k q acc else acc)
+                 BoxLeaf b
+
+public export
+laurentGreenLoop : Ord k =>
+                   (k -> k -> k) ->
+                   Nat ->
+                   (den, minCut : Integer) ->
+                   Box BoxInt k ->
+                   Box BoxInt k ->
+                   Box BoxInt k ->
+                   Box BoxInt k
+laurentGreenLoop _ Z _ _ _ _ acc = acc
+laurentGreenLoop _ _ _ _ _ BoxLeaf acc = acc
+laurentGreenLoop shiftAdd (S rem) den minCut stencil cur acc =
+  let spread = pairBoxWith shiftAdd cur stencil
+      nxt    = scaleDivPruneBox den minCut spread
+      acc1   = unionBox acc nxt
+  in laurentGreenLoop shiftAdd rem den minCut stencil nxt acc1
+
+||| Computes the truncated sparse discrete Poisson series
+||| `sum_{k=0}^{hops} trunc(((stencil / den)^k) * src)` over any associative shift `shiftAdd`,
+||| pruning intermediates below `minCut` to keep AVL trees lean.
+public export
+laurentGreenSeries : Ord k =>
+                     (k -> k -> k) ->
+                     (hops : Nat) ->
+                     (den, minCut : Integer) ->
+                     (stencil, src : Box BoxInt k) ->
+                     Box BoxInt k
+laurentGreenSeries shiftAdd hops den minCut stencil src =
+  let cur0 = pruneMinBox minCut src
+  in laurentGreenLoop shiftAdd hops den minCut stencil cur0 cur0
+
 ------------------------------------------------------------------------
 -- 7. STANDARD ALGEBRAIC INSTANCES ON `Box c k`
 ------------------------------------------------------------------------
