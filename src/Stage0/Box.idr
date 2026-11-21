@@ -598,6 +598,67 @@ public export
 isAntisymBox : (Ord k, MultisetWeight c) => Box c (k, k) -> Bool
 isAntisymBox m = transposeBox m == negateBox m
 
+||| Coordinate-generic square 2D Maxel carrier (`Box c (k, k)`).
+public export
+SquareMaxel : Type -> Type -> Type
+SquareMaxel c k = Box c (k, k)
+
+||| Symmetric pair-edge Maxel singleton: `w * ([a, b] + [b, a])` for `a /= b`, or `w * [a, a]` on the diagonal.
+||| Guarantees `isSymBox == True`.
+public export
+mkSymEdge : (Ord k, MultisetWeight c) => k -> k -> c -> SquareMaxel c k
+mkSymEdge a b w =
+  if isZero w
+    then BoxLeaf
+    else if a == b
+      then singletonBox (a, a) w
+      else setBox (b, a) w (singletonBox (a, b) w)
+
+||| Updates a symmetric pair `(a, b)` and `(b, a)` to `w` (or diagonal `(a, a)` when `a == b`).
+public export
+setSymEdge : (Ord k, MultisetWeight c) => k -> k -> c -> SquareMaxel c k -> SquareMaxel c k
+setSymEdge a b w m =
+  if a == b
+    then setBox (a, a) w m
+    else setBox (b, a) w (setBox (a, b) w m)
+
+||| Decides whether a square 2D `SquareMaxel c k` is symmetric (`transposeBox m == m`).
+public export
+isSymBox : (Ord k, MultisetWeight c) => SquareMaxel c k -> Bool
+isSymBox m = transposeBox m == m
+
+||| Unnormalized symmetric part `m + transposeBox m` of a `SquareMaxel c k`.
+public export
+symPartBox : (Ord k, MultisetWeight c) => SquareMaxel c k -> SquareMaxel c k
+symPartBox m = unionBox m (transposeBox m)
+
+||| Unnormalized antisymmetric part `m - transposeBox m` of a `SquareMaxel c k`.
+public export
+antisymPartBox : (Ord k, MultisetWeight c) => SquareMaxel c k -> SquareMaxel c k
+antisymPartBox m = subBox m (transposeBox m)
+
+||| Diagonal embedding of a 1D `Box c k` onto the coincidence diagonal `(k, k)` of a `SquareMaxel c k`.
+public export
+diagEmbedBox : (Ord k, MultisetWeight c) => Box c k -> SquareMaxel c k
+diagEmbedBox BoxLeaf = BoxLeaf
+diagEmbedBox m =
+  foldBox (\k, w, acc =>
+             if isZero w then acc else setBox (k, k) w acc)
+          BoxLeaf m
+
+||| Simultaneous pair-shift stencil convolution on `SquareMaxel c k`:
+||| shifts both endpoints `(a, b) -> (shiftAdd a s, shiftAdd b s)` for each shift `s` in `stencil`,
+||| preserving diagonal, symmetric, and antisymmetric Maxel subspaces identically.
+public export
+convolvePairStencil :
+  (Ord k, MultisetWeight c) =>
+  (k -> k -> k) ->
+  SquareMaxel c k ->
+  Box c k ->
+  SquareMaxel c k
+convolvePairStencil shiftAdd =
+  pairBoxWith (\(a, b), s => (shiftAdd a s, shiftAdd b s))
+
 ||| Sparse 4-direction Laurent stencil `[+dx, -dx, +dy, -dy]` over any `GroupCoord k`.
 public export
 laurentStencil4 : (GroupCoord k, MultisetWeight c) => (dx, dy : k) -> Box c k
