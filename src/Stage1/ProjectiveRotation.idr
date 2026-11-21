@@ -189,3 +189,50 @@ lookupRotatedMSet : ProjectiveProportion -> Vect 3 BoxInt -> MSetBox (Vect 3 Box
 lookupRotatedMSet p v m =
   lookupBox (rotateVectorScaled (inverseProportion p) v) m
 
+------------------------------------------------------------------------
+-- 6. WILDBERGER PARAMETRIC PYTHAGOREAN ROTATION `(m^2 - 1, 2m, m^2 + 1)`
+------------------------------------------------------------------------
+
+public export
+record PythPairResult where
+  constructor MkPythPairResult
+  valA : BoxInt
+  valB : BoxInt
+  valU : BoxInt
+
+||| Wildberger parametric Pythagorean `(m^2 - 1, 2m, m^2 + 1)` exact integer rotation
+||| on `(pA, pB, u)` for any `m >= 2`:
+|||   1. Preserves `pA + pB` identically.
+|||   2. Guarantees `2*(valA^2 + valB^2) + valU^2 <= 2*(pA^2 + pB^2) + u^2` unconditionally.
+public export
+rotatePythParam : (m, pA, pB, u : BoxInt) -> PythPairResult
+rotatePythParam m pA pB u =
+  let mVal  = if unwrapBox m < 2 then 2 else unwrapBox m
+      m2    = mVal * mVal
+      aCoef = m2 - 1
+      bCoef = 2 * mVal
+      rDen  = m2 + 1
+      sSum  = addBox pA pB
+      dDiff = subBox pB pA
+      numD  = MkBoxInt (aCoef * unwrapBox dDiff + bCoef * unwrapBox u)
+      numU  = MkBoxInt (aCoef * unwrapBox u     - bCoef * unwrapBox dDiff)
+      dRaw  = tdivPosBox numD rDen
+      uRaw  = tdivPosBox numU rDen
+      oddMismatch = isOddBox dRaw /= isOddBox sSum
+  in if not oddMismatch
+       then MkPythPairResult (tdiv2Box (subBox sSum dRaw)) (tdiv2Box (addBox sSum dRaw)) uRaw
+       else if dRaw > MkBoxInt 0
+         then let dNew = subBox dRaw (MkBoxInt 1)
+              in MkPythPairResult (tdiv2Box (subBox sSum dNew)) (tdiv2Box (addBox sSum dNew)) uRaw
+         else if dRaw < MkBoxInt 0
+           then let dNew = addBox dRaw (MkBoxInt 1)
+                in MkPythPairResult (tdiv2Box (subBox sSum dNew)) (tdiv2Box (addBox sSum dNew)) uRaw
+           else
+             let dNew = if numD >= MkBoxInt 0 then MkBoxInt 1 else MkBoxInt (-1)
+                 uNew = if boxIsZero numD
+                          then if uRaw > MkBoxInt 0 then subBox uRaw (MkBoxInt 1)
+                               else if uRaw < MkBoxInt 0 then addBox uRaw (MkBoxInt 1)
+                               else uRaw
+                          else uRaw
+             in MkPythPairResult (tdiv2Box (subBox sSum dNew)) (tdiv2Box (addBox sSum dNew)) uNew
+

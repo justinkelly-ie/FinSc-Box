@@ -103,6 +103,14 @@ public export
     rewrite assoc y1 y2 y3 in
     Refl
 
+public export
+(GroupCoord a, GroupCoord b) => GroupCoord (a, b) where
+  inverse (x, y) = (inverse x, inverse y)
+  invLaw (x, y) =
+    rewrite invLaw x in
+    rewrite invLaw y in
+    Refl
+
 ||| Vector/Matrix/Tensor Multiset Algebra interface encompassing the 5 canonical calculus operations:
 ||| addition (+), subtraction (-), multiplication (*), Hadamard pointwise product (.*),
 ||| tropical infimum (min), tropical supremum (max), and inner product (dot).
@@ -614,6 +622,25 @@ boxIntToSigned (MkBoxInt v) =
   if v == 0 then ZeroZ
   else if v > 0 then PosZ (cast (v - 1))
   else NegZ (cast ((-v) - 1))
+
+public export
+signedToInteger : SignedCoord -> Integer
+signedToInteger ZeroZ    = 0
+signedToInteger (PosZ k) = natToInteger (S k)
+signedToInteger (NegZ k) = negate (natToInteger (S k))
+
+public export
+intToSigned : Integer -> SignedCoord
+intToSigned v =
+  if v == 0 then ZeroZ
+  else if v > 0 then PosZ (integerToNat (v - 1))
+  else NegZ (integerToNat ((-v) - 1))
+
+public export
+isOddSigned : SignedCoord -> Bool
+isOddSigned ZeroZ    = False
+isOddSigned (PosZ k) = isOddBox (MkBoxInt (natToInteger (S k)))
+isOddSigned (NegZ k) = isOddBox (MkBoxInt (natToInteger (S k)))
 
 -- =========================================================================
 -- Modular Cyclic Coordinate Instances on `Fin (S n)`

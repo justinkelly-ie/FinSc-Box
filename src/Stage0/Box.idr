@@ -576,6 +576,42 @@ diagMaskBox m =
             if x == y then addAtKeyBox (x, y) w acc else acc)
           BoxLeaf m
 
+||| Antisymmetric directed-edge Maxel singleton: `w * ([a, b] - [b, a])` (`a /= b`).
+||| Guarantees `transposeBox == negateBox` and `totalMassBox == zeroWeight`.
+public export
+mkAntisymEdge : (Ord k, MultisetWeight c) => k -> k -> c -> Box c (k, k)
+mkAntisymEdge a b w =
+  if a == b || isZero w
+    then BoxLeaf
+    else setBox (b, a) (negWeight w) (singletonBox (a, b) w)
+
+||| Updates an antisymmetric edge pair `(a, b) -> +w` and `(b, a) -> -w` canonically.
+public export
+setAntisymEdge : (Ord k, MultisetWeight c) => k -> k -> c -> Box c (k, k) -> Box c (k, k)
+setAntisymEdge a b w m =
+  if a == b
+    then m
+    else setBox (b, a) (negWeight w) (setBox (a, b) w m)
+
+||| Decides whether a square 2D `Box c (k, k)` is antisymmetric (`transposeBox m == negateBox m`).
+public export
+isAntisymBox : (Ord k, MultisetWeight c) => Box c (k, k) -> Bool
+isAntisymBox m = transposeBox m == negateBox m
+
+||| Sparse 4-direction Laurent stencil `[+dx, -dx, +dy, -dy]` over any `GroupCoord k`.
+public export
+laurentStencil4 : (GroupCoord k, MultisetWeight c) => (dx, dy : k) -> Box c k
+laurentStencil4 dx dy =
+  addAtKeyBox (inverse dy) oneWeight $
+  addAtKeyBox dy           oneWeight $
+  addAtKeyBox (inverse dx) oneWeight $
+  singletonBox dx          oneWeight
+
+||| Sparse Laurent stencil convolution `m * stencil` over any `MonoidCoord k`.
+public export
+convolveStencil : (MonoidCoord k, MultisetWeight c) => Box c k -> Box c k -> Box c k
+convolveStencil = mulBoxWith
+
 ------------------------------------------------------------------------
 -- 7. STANDARD ALGEBRAIC INSTANCES ON `Box c k`
 ------------------------------------------------------------------------
