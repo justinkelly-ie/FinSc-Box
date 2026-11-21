@@ -82,6 +82,28 @@ tdiv4Box (MkBoxInt v) =
     then MkBoxInt (divIntegerPos v 4)
     else MkBoxInt (-(divIntegerPos (-v) 4))
 
+||| Symmetric truncating division by a strictly positive integer denominator (`assert_total`-free).
+public export
+tdivPosBox : BoxInt -> Integer -> BoxInt
+tdivPosBox (MkBoxInt v) den =
+  if den <= 0
+    then MkBoxInt 0
+    else if v >= 0
+      then MkBoxInt (divIntegerPos v den)
+      else MkBoxInt (-(divIntegerPos (-v) den))
+
+||| Symmetric truncating division by 2 directly on signed `BoxInt` (`assert_total`-free).
+public export
+tdiv2Box : BoxInt -> BoxInt
+tdiv2Box b = tdivPosBox b 2
+
+||| Total O(log |v|) odd-parity predicate directly on signed `BoxInt` (`assert_total`-free).
+public export
+isOddBox : BoxInt -> Bool
+isOddBox (MkBoxInt v) =
+  let a = if v < 0 then -v else v
+  in snd (divModIntegerPos a 2) == 1
+
 %inline public export
 addBox : BoxInt -> BoxInt -> BoxInt
 addBox (MkBoxInt a) (MkBoxInt b) = MkBoxInt (a + b)
