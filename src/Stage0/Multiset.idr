@@ -69,26 +69,6 @@ public export
 hadamardMSet : DiscreteCoord k => MSetBox k -> MSetBox k -> MSetBox k
 hadamardMSet = hadamardBox
 
-||| Pointwise lattice infimum (MinM) over MSetBox k in O(N log N) time.
-public export
-minMSet : DiscreteCoord k => MSetBox k -> MSetBox k -> MSetBox k
-minMSet = minBox
-
-||| Pointwise lattice supremum (MaxM) over MSetBox k in O((N + M) log(N + M)) time.
-public export
-maxMSet : DiscreteCoord k => MSetBox k -> MSetBox k -> MSetBox k
-maxMSet = maxBox
-
-||| Computes total mass of common shared tokens between two multisets |A ∩ B|.
-public export
-boxIntersectionMass : Ord a => MSetBox a -> MSetBox a -> Nat
-boxIntersectionMass a b = boxToNat (totalMassBox (minBox a b))
-
-||| Computes total union mass |A ∪ B| = sum max(w_A, w_B).
-public export
-boxUnionMass : Ord a => MSetBox a -> MSetBox a -> Nat
-boxUnionMass a b = boxToNat (totalMassBox (maxBox a b))
-
 ||| Multiset Symmetric Difference Information Distance.
 public export
 boxSymmetricDifference : Ord a => MSetBox a -> MSetBox a -> Nat

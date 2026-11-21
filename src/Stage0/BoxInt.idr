@@ -229,18 +229,8 @@ Show BoxInt where
   show (MkBoxInt a) = "[" ++ show a ++ "]"
 
 ------------------------------------------------------------------------
--- 2. LATTICE MEET/JOIN & CONSTRUCTIVE NON-ZERO RECOGNIZER (`Dec`)
+-- 2. CONSTRUCTIVE NON-ZERO RECOGNIZER (`Dec`)
 ------------------------------------------------------------------------
-
-||| Pointwise lattice meet (`min`) for tropical `/\` envelopes.
-%inline public export
-minBox : BoxInt -> BoxInt -> BoxInt
-minBox a b = if a <= b then a else b
-
-||| Pointwise lattice join (`max`) for tropical `\/` envelopes.
-%inline public export
-maxBox : BoxInt -> BoxInt -> BoxInt
-maxBox a b = if a >= b then a else b
 
 ||| Constructive predicate witnessing that a `BoxInt` is non-zero.
 public export

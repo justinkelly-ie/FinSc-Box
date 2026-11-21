@@ -472,21 +472,6 @@ zipZeroWeightBox op t1 t2 =
              step1
              t2
 
-||| Symmetric pointwise tropical minimum envelope (`A /\ B`) satisfying `(A /\ B) + (A \/ B) = A + B`.
-public export
-minBox : (Ord k, MultisetWeight c) => Box c k -> Box c k -> Box c k
-minBox = zipZeroWeightBox minWeight
-
-||| Alias for pointwise infimum intersection.
-public export
-intersectBox : (Ord k, MultisetWeight c) => Box c k -> Box c k -> Box c k
-intersectBox = minBox
-
-||| Symmetric pointwise tropical maximum envelope (`A \/ B`).
-public export
-maxBox : (Ord k, MultisetWeight c) => Box c k -> Box c k -> Box c k
-maxBox = zipZeroWeightBox maxWeight
-
 ||| Canonical inner product (`A <.> B`) returning scalar multiplicity weight `c`.
 public export
 dotBox : (Ord k, MultisetWeight c) => Box c k -> Box c k -> c
@@ -748,6 +733,27 @@ subSameBox : Ord k => MultisetWeight c => Box c (k, k) -> Box c (k, k) -> Box c 
 subSameBox = subBox
 
 public export
+dotSameBox : Ord k => MultisetWeight c => Box c (k, k) -> Box c (k, k) -> c
+dotSameBox = dotBox
+
+public export
+hadamardSameBox : Ord k => MultisetWeight c => Box c (k, k) -> Box c (k, k) -> Box c (k, k)
+hadamardSameBox = hadamardBox
+
+public export
+dotSymHalfBox : Ord k => MultisetWeight c => Box c (k, k) -> Box c (k, k) -> c
+dotSymHalfBox BoxLeaf _ = zeroWeight
+dotSymHalfBox _ BoxLeaf = zeroWeight
+dotSymHalfBox m1 m2 =
+  foldBox (\(x, y), w1, acc =>
+             let prod = mulWeight w1 (lookupBox (x, y) m2)
+             in if x == y
+                  then addWeight acc prod
+                  else addWeight acc (addWeight prod prod))
+          zeroWeight
+          m1
+
+public export
 addMaxel :
   {auto ordA : Ord a} -> {auto ordB : Ord b} -> {auto mw : MultisetWeight c} ->
   {form : MaxelForm a b} -> Maxel c a b form -> Maxel c a b form -> Maxel c a b form
@@ -772,6 +778,16 @@ scaleMaxel : MultisetWeight c => c -> Maxel c a b form -> Maxel c a b form
 scaleMaxel s (MkMaxel m) = MkMaxel (scaleBox s m)
 
 public export
+dotMaxel :
+  {auto ordA : Ord a} -> {auto ordB : Ord b} -> {auto mw : MultisetWeight c} ->
+  {form : MaxelForm a b} -> Maxel c a b form -> Maxel c a b form -> c
+dotMaxel {form = GeneralForm} (MkMaxel m1) (MkMaxel m2) = dotBox m1 m2
+dotMaxel {form = SymForm}     (MkMaxel m1) (MkMaxel m2) = dotSymHalfBox @{ordA} @{mw} m1 m2
+dotMaxel {form = AntisymForm} (MkMaxel m1) (MkMaxel m2) =
+  let half = dotSameBox @{ordA} @{mw} m1 m2
+  in addWeight half half
+
+public export
 transposeMaxel :
   {auto ordA : Ord a} -> {auto ordB : Ord b} -> MultisetWeight c =>
   {form : MaxelForm a b} -> Maxel c a b form -> Maxel c b a (transposeMaxelForm form)
@@ -789,11 +805,7 @@ diagEmbedMaxel : (Ord k, MultisetWeight c) => Box c k -> Maxel c k k SymForm
 diagEmbedMaxel b = MkMaxel (diagEmbedBox b)
 
 public export
-hadamardAntisymSquare : (Ord k, MultisetWeight c) => Maxel c k k AntisymForm -> Maxel c k k SymForm
-hadamardAntisymSquare (MkMaxel m) = MkMaxel (hadamardBox m m)
-
-public export
-toGeneralMaxel : (Ord k, MultisetWeight c) => {form : MaxelForm k k} -> Maxel c k k form -> Maxel c k k GeneralForm
+toGeneralMaxel : Ord k => MultisetWeight c => {form : MaxelForm k k} -> Maxel c k k form -> Maxel c k k GeneralForm
 toGeneralMaxel {form = GeneralForm} m = m
 toGeneralMaxel {form = SymForm} (MkMaxel m) =
   MkMaxel $ foldBox (\(x, y), w, acc =>
@@ -807,6 +819,40 @@ toGeneralMaxel {form = AntisymForm} (MkMaxel m) =
                          then acc
                          else addAtKeyBox (y, x) (negWeight w) (addAtKeyBox (x, y) w acc))
                     BoxLeaf m
+
+public export
+hadamardMaxelForm : MaxelForm a b -> MaxelForm a b -> MaxelForm a b
+hadamardMaxelForm GeneralForm _           = GeneralForm
+hadamardMaxelForm SymForm     GeneralForm = GeneralForm
+hadamardMaxelForm AntisymForm GeneralForm = GeneralForm
+hadamardMaxelForm SymForm     SymForm     = SymForm
+hadamardMaxelForm AntisymForm AntisymForm = SymForm
+hadamardMaxelForm SymForm     AntisymForm = AntisymForm
+hadamardMaxelForm AntisymForm SymForm     = AntisymForm
+
+public export
+hadamardMaxel :
+  {auto ordA : Ord a} -> {auto ordB : Ord b} -> {auto mw : MultisetWeight c} ->
+  {f1, f2 : MaxelForm a b} ->
+  Maxel c a b f1 -> Maxel c a b f2 -> Maxel c a b (hadamardMaxelForm f1 f2)
+hadamardMaxel {f1 = GeneralForm} {f2 = GeneralForm} (MkMaxel m1) (MkMaxel m2) =
+  MkMaxel (hadamardBox m1 m2)
+hadamardMaxel {f1 = GeneralForm} {f2 = SymForm} (MkMaxel m1) (MkMaxel m2) =
+  MkMaxel (hadamardSameBox @{ordA} @{mw} m1 (toGeneralMaxel @{ordA} @{mw} {form = SymForm} (MkMaxel m2)).rawMaxelBox)
+hadamardMaxel {f1 = GeneralForm} {f2 = AntisymForm} (MkMaxel m1) (MkMaxel m2) =
+  MkMaxel (hadamardSameBox @{ordA} @{mw} m1 (toGeneralMaxel @{ordA} @{mw} {form = AntisymForm} (MkMaxel m2)).rawMaxelBox)
+hadamardMaxel {f1 = SymForm} {f2 = GeneralForm} (MkMaxel m1) (MkMaxel m2) =
+  MkMaxel (hadamardSameBox @{ordA} @{mw} (toGeneralMaxel @{ordA} @{mw} {form = SymForm} (MkMaxel m1)).rawMaxelBox m2)
+hadamardMaxel {f1 = AntisymForm} {f2 = GeneralForm} (MkMaxel m1) (MkMaxel m2) =
+  MkMaxel (hadamardSameBox @{ordA} @{mw} (toGeneralMaxel @{ordA} @{mw} {form = AntisymForm} (MkMaxel m1)).rawMaxelBox m2)
+hadamardMaxel {f1 = SymForm} {f2 = SymForm} (MkMaxel m1) (MkMaxel m2) =
+  MkMaxel (hadamardSameBox @{ordA} @{mw} m1 m2)
+hadamardMaxel {f1 = AntisymForm} {f2 = AntisymForm} (MkMaxel m1) (MkMaxel m2) =
+  MkMaxel (hadamardSameBox @{ordA} @{mw} m1 m2)
+hadamardMaxel {f1 = SymForm} {f2 = AntisymForm} (MkMaxel m1) (MkMaxel m2) =
+  MkMaxel (hadamardSameBox @{ordA} @{mw} m1 m2)
+hadamardMaxel {f1 = AntisymForm} {f2 = SymForm} (MkMaxel m1) (MkMaxel m2) =
+  MkMaxel (hadamardSameBox @{ordA} @{mw} m1 m2)
 
 public export
 convolveMaxelStencil :
@@ -928,28 +974,89 @@ public export
   neutral = emptyMaxel
 
 public export
-(Ord k, MultisetWeight c) => WeightedMultisetAlgebra c (Box c k) where
-  zeroWM     = BoxLeaf
-  addWM      = unionBox
-  subWM      = subBox
-  scaleWM    = scaleBox
-  mulWM      = hadamardBox
-  hadamardWM = hadamardBox
-  minWM      = minBox
-  maxWM      = maxBox
-  dotWM      = dotBox
+(Ord k, MultisetWeight c) => MultisetAlgebra c (Box c k) where
+  zeroM  = BoxLeaf
+  addM   = unionBox
+  negM   = negateBox
+  subM   = subBox
+  scaleM = scaleBox
+  dotM   = dotBox
 
 public export
-Ord k => MultisetAlgebra (Box BoxInt k) where
-  zeroM     = BoxLeaf
-  addM      = unionBox
-  subM      = subBox
-  scaleM    = scaleBox
-  mulM      = hadamardBox
-  hadamardM = hadamardBox
-  minM      = minBox
-  maxM      = maxBox
-  dotM      = dotBox
+(Ord k, MultisetWeight c) => MultisetHadamard (Box c k) (Box c k) (Box c k) where
+  (.*.) = hadamardBox
+
+public export
+(Ord a, Ord b, MultisetWeight c) => MultisetAlgebra c (Maxel c a b GeneralForm) where
+  zeroM  = emptyMaxel
+  addM   = addMaxel
+  negM   = negateMaxel
+  subM   = subMaxel
+  scaleM = scaleMaxel
+  dotM   = dotMaxel
+
+public export
+(Ord k, MultisetWeight c) => MultisetAlgebra c (Maxel c k k SymForm) where
+  zeroM  = emptyMaxel
+  addM   = addMaxel
+  negM   = negateMaxel
+  subM   = subMaxel
+  scaleM = scaleMaxel
+  dotM   = dotMaxel
+
+public export
+(Ord k, MultisetWeight c) => MultisetAlgebra c (Maxel c k k AntisymForm) where
+  zeroM  = emptyMaxel
+  addM   = addMaxel
+  negM   = negateMaxel
+  subM   = subMaxel
+  scaleM = scaleMaxel
+  dotM   = dotMaxel
+
+public export
+(Ord a, Ord b, MultisetWeight c) =>
+MultisetHadamard (Maxel c a b GeneralForm) (Maxel c a b GeneralForm) (Maxel c a b GeneralForm) where
+  (.*.) = hadamardMaxel
+
+public export
+(Ord k, MultisetWeight c) =>
+MultisetHadamard (Maxel c k k GeneralForm) (Maxel c k k SymForm) (Maxel c k k GeneralForm) where
+  (.*.) = hadamardMaxel
+
+public export
+(Ord k, MultisetWeight c) =>
+MultisetHadamard (Maxel c k k GeneralForm) (Maxel c k k AntisymForm) (Maxel c k k GeneralForm) where
+  (.*.) = hadamardMaxel
+
+public export
+(Ord k, MultisetWeight c) =>
+MultisetHadamard (Maxel c k k SymForm) (Maxel c k k GeneralForm) (Maxel c k k GeneralForm) where
+  (.*.) = hadamardMaxel
+
+public export
+(Ord k, MultisetWeight c) =>
+MultisetHadamard (Maxel c k k AntisymForm) (Maxel c k k GeneralForm) (Maxel c k k GeneralForm) where
+  (.*.) = hadamardMaxel
+
+public export
+(Ord k, MultisetWeight c) =>
+MultisetHadamard (Maxel c k k SymForm) (Maxel c k k SymForm) (Maxel c k k SymForm) where
+  (.*.) = hadamardMaxel
+
+public export
+(Ord k, MultisetWeight c) =>
+MultisetHadamard (Maxel c k k AntisymForm) (Maxel c k k AntisymForm) (Maxel c k k SymForm) where
+  (.*.) = hadamardMaxel
+
+public export
+(Ord k, MultisetWeight c) =>
+MultisetHadamard (Maxel c k k SymForm) (Maxel c k k AntisymForm) (Maxel c k k AntisymForm) where
+  (.*.) = hadamardMaxel
+
+public export
+(Ord k, MultisetWeight c) =>
+MultisetHadamard (Maxel c k k AntisymForm) (Maxel c k k SymForm) (Maxel c k k AntisymForm) where
+  (.*.) = hadamardMaxel
 
 public export
 MonoidCoord k => Num (Box BoxInt k) where

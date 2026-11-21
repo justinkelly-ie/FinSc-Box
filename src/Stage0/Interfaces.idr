@@ -111,68 +111,9 @@ public export
     rewrite invLaw y in
     Refl
 
-||| Vector/Matrix/Tensor Multiset Algebra interface encompassing the 5 canonical calculus operations:
-||| addition (+), subtraction (-), multiplication (*), Hadamard pointwise product (.*),
-||| tropical infimum (min), tropical supremum (max), and inner product (dot).
-public export
-interface MultisetAlgebra a where
-  zeroM     : a
-  addM      : a -> a -> a
-  subM      : a -> a -> a
-  subM x y = addM x (scaleM (intToBoxInt (-1)) y)
-  scaleM    : BoxInt -> a -> a
-  mulM      : a -> a -> a
-  mulM = hadamardM
-  hadamardM : a -> a -> a
-  minM      : a -> a -> a
-  maxM      : a -> a -> a
-  dotM      : a -> a -> BoxInt
-
------------------------------------------------------------------------
--- CANONICAL SYMBOLIC INFIX OPERATORS FOR MULTISET ALGEBRA
------------------------------------------------------------------------
-
-public export
-infixl 7 <.>
-
-||| Inner / Dot product: <.>
-public export
-(<.>) : MultisetAlgebra a => a -> a -> BoxInt
-(<.>) = dotM
-
-public export
-infixl 8 .*.
-
-||| Pointwise / Hadamard product: .*.
-public export
-(.*.) : MultisetAlgebra a => a -> a -> a
-(.*.) = hadamardM
-
-public export
-infixl 8 /\
-
-||| Tropical infimum / Lattice meet (min): /\
-public export
-(/\) : MultisetAlgebra a => a -> a -> a
-(/\) = minM
-
-public export
-infixl 8 \/
-
-||| Tropical supremum / Lattice join (max): \/
-public export
-(\/) : MultisetAlgebra a => a -> a -> a
-(\/) = maxM
-
-public export
-infixl 7 ><
-
-------------------------------------------------------------------------
--- Multiplicity & Parameterised Multiset Algebra
-------------------------------------------------------------------------
-
-||| Algebraic interface required for any discrete multiplicity `c` (`BoxInt`,
-||| `SignedBit`, `MultisetBit`) to drive `MSet c k` (`Box c k`) and `HereditaryMSet c`.
+||| Core algebraic interface shared by all multisets (`Box c k`, `HereditaryMSet c`,
+||| and `Maxel c a b form` across `GeneralForm`, `SymForm`, and `AntisymForm`):
+||| additive group (`0`, `+`, `neg`, `-`), scalar scaling, and bilinear inner product (`<.>`).
 public export
 interface Ord c => MultisetWeight c where
   zeroWeight : c
@@ -181,8 +122,6 @@ interface Ord c => MultisetWeight c where
   addWeight  : c -> c -> c
   negWeight  : c -> c
   mulWeight  : c -> c -> c
-  minWeight  : c -> c -> c
-  maxWeight  : c -> c -> c
   weightMagnitude : c -> Nat
   weightMagnitude w = if isZero w then 0 else 1
 
@@ -204,8 +143,6 @@ MultisetWeight BoxInt where
   addWeight  = addBox
   negWeight  = negBox
   mulWeight  = mulBox
-  minWeight  = Stage0.BoxInt.minBox
-  maxWeight  = Stage0.BoxInt.maxBox
   weightMagnitude (MkBoxInt w) = integerToNat (abs w)
 
 ||| Defines how a multiplicity `c` peels off one positive (`Left`)
@@ -226,21 +163,43 @@ QuantumCarrier BoxInt where
     else if w < 0 then Just (Right (intToBoxInt (w + 1)))
     else Nothing
 
-||| Multiplicity-parameterised multiset algebra generalizing `MultisetAlgebra`
-||| beyond fixed `BoxInt` multiplicities to any `Multiplicity c` (`SignedBit`,
-||| `MultisetBit`, `BoxInt`). `| a` determines `c` uniquely for overload resolution.
+||| Unified core multiset algebra shared by `Box c k`, `HereditaryMSet c`,
+||| and `Maxel c a b form`: additive group (`0`, `+`, `neg`, `-`), scalar
+||| scaling, and bilinear inner product (`<.>`).
 public export
-interface MultisetWeight c => WeightedMultisetAlgebra c a | a where
-  zeroWM     : a
-  addWM      : a -> a -> a
-  subWM      : a -> a -> a
-  scaleWM    : c -> a -> a
-  mulWM      : a -> a -> a
-  hadamardWM : a -> a -> a
-  minWM      : a -> a -> a
-  maxWM      : a -> a -> a
-  dotWM      : a -> a -> c
-  mulWM = hadamardWM
+interface MultisetWeight c => MultisetAlgebra c a | a where
+  zeroM  : a
+  addM   : a -> a -> a
+  negM   : a -> a
+  subM   : a -> a -> a
+  scaleM : c -> a -> a
+  dotM   : a -> a -> c
+  subM x y = addM x (negM y)
+
+-----------------------------------------------------------------------
+-- CANONICAL SYMBOLIC INFIX OPERATORS FOR MULTISET ALGEBRA
+-----------------------------------------------------------------------
+
+public export
+infixl 7 <.>
+
+||| Inner / Dot product: <.>
+public export
+(<.>) : MultisetAlgebra c a => a -> a -> c
+(<.>) = dotM
+
+public export
+infixl 8 .*.
+
+||| Pointwise Hadamard product (`.*.`), supporting both closed forms (`Box`, `HereditaryMSet`)
+||| and symmetry-tracked `Maxel` parity (`Sym * Sym = Sym`, `Antisym * Antisym = Sym`,
+||| `Sym * Antisym = Antisym`).
+public export
+interface MultisetHadamard a b out | a, b where
+  (.*.) : a -> b -> out
+
+public export
+infixl 7 ><
 
 ||| Polymorphic outer product interface shared by Cartesian coordinates (`Box c`)
 ||| and Kuratowski pairing (`HereditaryMSet c`).

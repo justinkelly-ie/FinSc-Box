@@ -176,7 +176,7 @@ public export
 subHMSet : MultisetWeight c => HereditaryMSet c -> HereditaryMSet c -> HereditaryMSet c
 subHMSet (MkHMSet b1) (MkHMSet b2) = MkHMSet (subBox b1 b2)
 
-||| Scalar scaling (`scaleWM` / `scaleM`): scales all top-level multiplicities by `s : c`.
+||| Scalar scaling (`scaleM`): scales all top-level multiplicities by `s : c`.
 public export
 scaleHMSet : MultisetWeight c => c -> HereditaryMSet c -> HereditaryMSet c
 scaleHMSet s (MkHMSet b) = MkHMSet (scaleBox s b)
@@ -190,16 +190,6 @@ hadamardHMSet (MkHMSet b1) (MkHMSet b2) = MkHMSet (hadamardBox b1 b2)
 public export
 dotHMSet : MultisetWeight c => HereditaryMSet c -> HereditaryMSet c -> c
 dotHMSet (MkHMSet b1) (MkHMSet b2) = dotBox b1 b2
-
-||| Tropical Minimum Envelope (`/\`): pointwise `minWeight` across the union of keys.
-public export
-minHMSet : MultisetWeight c => HereditaryMSet c -> HereditaryMSet c -> HereditaryMSet c
-minHMSet (MkHMSet b1) (MkHMSet b2) = MkHMSet (minBox b1 b2)
-
-||| Tropical Maximum Envelope (`\/`): pointwise `maxWeight` across the union of keys.
-public export
-maxHMSet : MultisetWeight c => HereditaryMSet c -> HereditaryMSet c -> HereditaryMSet c
-maxHMSet (MkHMSet b1) (MkHMSet b2) = MkHMSet (maxBox b1 b2)
 
 ||| Total Mass / Volume (`sumHMSet`): sums all active weights in `c`.
 public export
@@ -268,32 +258,21 @@ MultisetWeight c => Monoid (HereditaryMSet c) where
   neutral = emptyHMSet
 
 public export
-MultisetWeight c => WeightedMultisetAlgebra c (HereditaryMSet c) where
-  zeroWM     = emptyHMSet
-  addWM      = addHMSet
-  subWM      = subHMSet
-  scaleWM    = scaleHMSet
-  mulWM      = hadamardHMSet
-  hadamardWM = hadamardHMSet
-  minWM      = minHMSet
-  maxWM      = maxHMSet
-  dotWM      = dotHMSet
+MultisetWeight c => MultisetAlgebra c (HereditaryMSet c) where
+  zeroM  = emptyHMSet
+  addM   = addHMSet
+  negM   = negHMSet
+  subM   = subHMSet
+  scaleM = scaleHMSet
+  dotM   = dotHMSet
+
+public export
+MultisetWeight c => MultisetHadamard (HereditaryMSet c) (HereditaryMSet c) (HereditaryMSet c) where
+  (.*.) = hadamardHMSet
 
 public export
 MultisetWeight c => MultisetOuter (HereditaryMSet c) (HereditaryMSet c) (HereditaryMSet c) where
   (><) = outerHMSet
-
-public export
-MultisetAlgebra PureMultiset where
-  zeroM     = emptyPureMSet
-  addM      = addHMSet
-  subM      = subHMSet
-  scaleM    = scaleHMSet
-  mulM      = hadamardHMSet
-  hadamardM = hadamardHMSet
-  minM      = minHMSet
-  maxM      = maxHMSet
-  dotM      = dotHMSet
 
 public export
 Num PureMultiset where
