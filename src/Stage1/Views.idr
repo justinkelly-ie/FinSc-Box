@@ -124,21 +124,6 @@ public export
 viewAsLaurent : MultisetWeight c => (toInt : c -> Integer) -> HereditaryMSet c -> LaurentView c
 viewAsLaurent toInt m@(MkHMSet tree) = laurentViewLoop (S (boxNodeCount tree)) toInt m
 
-public export
-toLaurentTermsLoop : MultisetWeight c => Nat -> (toInt : c -> Integer) -> HereditaryMSet c -> List (Integer, c)
-toLaurentTermsLoop Z _ _ = []
-toLaurentTermsLoop (S rem) toInt m =
-  case viewAsLaurent toInt m of
-    LaurentZero            => []
-    LaurentTerm k coeff r  => (k, coeff) :: toLaurentTermsLoop rem toInt r
-    LaurentNested _ _ r    => toLaurentTermsLoop rem toInt r
-
-||| Helper converting any `HereditaryMSet c` into a flat sorted list of `(exponent, coeff)`
-||| pairs for display, evaluation, or NTT lowering using structural `boxNodeCount` fuel.
-public export
-toLaurentTerms : MultisetWeight c => (toInt : c -> Integer) -> HereditaryMSet c -> List (Integer, c)
-toLaurentTerms toInt m@(MkHMSet tree) = toLaurentTermsLoop (S (boxNodeCount tree)) toInt m
-
 
 ------------------------------------------------------------------------
 -- 4. CONSTRUCTIVIST DUAL-CHANNEL DISJOINTNESS RECOGNIZER (`recognition-rule.md`)

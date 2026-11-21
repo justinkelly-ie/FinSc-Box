@@ -11,42 +11,33 @@ import Stage0.HereditaryMSet
 %default total
 
 --------------------------------------------------------------------------------
--- 1. TOTAL BASE-10 INTEGER RENDERING (COMPILE-TIME & RUNTIME CONSISTENT)
+-- 1. TOTAL BASE-10 INTEGER RENDERING (DIRECT `Integer`, ZERO PEANO `Nat`!)
 --------------------------------------------------------------------------------
 
-||| Renders a single base-10 digit (0..9) to its ASCII Char.
+||| Renders a single base-10 integer digit (`0..9`) directly to its ASCII `Char`.
 public export
-digitToChar : Nat -> Char
-digitToChar 0 = '0'
-digitToChar 1 = '1'
-digitToChar 2 = '2'
-digitToChar 3 = '3'
-digitToChar 4 = '4'
-digitToChar 5 = '5'
-digitToChar 6 = '6'
-digitToChar 7 = '7'
-digitToChar 8 = '8'
-digitToChar 9 = '9'
-digitToChar _ = '?'
+digitIntToChar : Integer -> Char
+digitIntToChar 0 = '0'
+digitIntToChar 1 = '1'
+digitIntToChar 2 = '2'
+digitIntToChar 3 = '3'
+digitIntToChar 4 = '4'
+digitIntToChar 5 = '5'
+digitIntToChar 6 = '6'
+digitIntToChar 7 = '7'
+digitIntToChar 8 = '8'
+digitIntToChar 9 = '9'
+digitIntToChar _ = '?'
 
-||| Total fueled quotient/remainder by 10 without primitives (`assert_total`-free).
+||| Total O(log10 N) formatting directly on non-negative `Integer` via `divModIntegerPos`.
 public export
-divMod10Fuel : Nat -> Nat -> Nat -> (Nat, Nat)
-divMod10Fuel Z     q r = (q, r)
-divMod10Fuel (S f) q r =
-  if r < 10
-    then (q, r)
-    else divMod10Fuel f (S q) (minus r 10)
-
-||| Total fueled positive `Nat` to base-10 `List Char`.
-public export
-natToCharsFuel : Nat -> Nat -> List Char -> List Char
-natToCharsFuel Z     _ acc = acc
-natToCharsFuel (S f) n acc =
+posIntToCharsFuel : Nat -> Integer -> List Char -> List Char
+posIntToCharsFuel Z     _ acc = acc
+posIntToCharsFuel (S f) n acc =
   if n < 10
-    then digitToChar n :: acc
-    else let (q, r) = divMod10Fuel (S n) 0 n
-         in natToCharsFuel f q (digitToChar r :: acc)
+    then digitIntToChar n :: acc
+    else let (q, r) = divModIntegerPos n 10
+         in posIntToCharsFuel f q (digitIntToChar r :: acc)
 
 ||| Renders an `Integer` in base 10 matching `Show Integer`.
 public export
@@ -55,10 +46,8 @@ renderInteger n =
   if n == 0
     then "0"
     else if n < 0
-      then let k = integerToNat (-n)
-           in pack ('-' :: natToCharsFuel (S k) k [])
-      else let k = integerToNat n
-           in pack (natToCharsFuel (S k) k [])
+      then pack ('-' :: posIntToCharsFuel 128 (-n) [])
+      else pack (posIntToCharsFuel 128 n [])
 
 --------------------------------------------------------------------------------
 -- 2. CANONICAL MULTISET RENDERER (EXACT PARITY WITH `Stage0.HereditaryMSet.show`)
@@ -91,20 +80,20 @@ renderPureMultiset m = renderPureFuel (hmDepth m) m
 -- 3. TOTAL FUELED PARSER OVER `List Char`
 --------------------------------------------------------------------------------
 
-||| Parses a single ASCII digit `0..9`.
+||| Parses a single ASCII digit `0..9` directly to `Integer`.
 public export
-charToDigit : Char -> Maybe Nat
-charToDigit '0' = Just 0
-charToDigit '1' = Just 1
-charToDigit '2' = Just 2
-charToDigit '3' = Just 3
-charToDigit '4' = Just 4
-charToDigit '5' = Just 5
-charToDigit '6' = Just 6
-charToDigit '7' = Just 7
-charToDigit '8' = Just 8
-charToDigit '9' = Just 9
-charToDigit _   = Nothing
+charToDigitInt : Char -> Maybe Integer
+charToDigitInt '0' = Just 0
+charToDigitInt '1' = Just 1
+charToDigitInt '2' = Just 2
+charToDigitInt '3' = Just 3
+charToDigitInt '4' = Just 4
+charToDigitInt '5' = Just 5
+charToDigitInt '6' = Just 6
+charToDigitInt '7' = Just 7
+charToDigitInt '8' = Just 8
+charToDigitInt '9' = Just 9
+charToDigitInt _   = Nothing
 
 public export
 skipSpaces : List Char -> List Char
@@ -112,26 +101,12 @@ skipSpaces (' ' :: cs) = skipSpaces cs
 skipSpaces cs          = cs
 
 public export
-digitToInteger : Nat -> Integer
-digitToInteger 0 = 0
-digitToInteger 1 = 1
-digitToInteger 2 = 2
-digitToInteger 3 = 3
-digitToInteger 4 = 4
-digitToInteger 5 = 5
-digitToInteger 6 = 6
-digitToInteger 7 = 7
-digitToInteger 8 = 8
-digitToInteger 9 = 9
-digitToInteger _ = 0
-
-public export
 parseDigitsAcc : Nat -> Integer -> Bool -> List Char -> Maybe (Integer, List Char)
 parseDigitsAcc Z     acc hasDig cs = if hasDig then Just (acc, cs) else Nothing
 parseDigitsAcc (S f) acc hasDig [] = if hasDig then Just (acc, []) else Nothing
 parseDigitsAcc (S f) acc hasDig (c :: cs) =
-  case charToDigit c of
-    Just d  => parseDigitsAcc f (acc * 10 + digitToInteger d) True cs
+  case charToDigitInt c of
+    Just d  => parseDigitsAcc f (acc * 10 + d) True cs
     Nothing => if hasDig then Just (acc, c :: cs) else Nothing
 
 public export

@@ -26,17 +26,61 @@ unwrapBox : BoxInt -> Integer
 unwrapBox (MkBoxInt v) = v
 
 ||| 2LTT Staging Operation: Lifting (⇑Int) - Lifts integer value into boxed discrete representation.
-%inline public export
+||| Builds descending `(powerOfTwo, shiftedDenominator)` pairs for O(log N) binary division.
+public export
+buildPow2Pairs : Nat -> Integer -> Integer -> Integer -> List (Integer, Integer) -> List (Integer, Integer)
+buildPow2Pairs Z _ _ _ acc = acc
+buildPow2Pairs (S fuel) num bit curDen acc =
+  if curDen > num
+    then acc
+    else buildPow2Pairs fuel num (bit + bit) (curDen + curDen) ((bit, curDen) :: acc)
+
+||| Consumes `(powerOfTwo, shiftedDenominator)` pairs to yield exact `(quotient, remainder)`.
+public export
+consumePow2Pairs : Integer -> Integer -> List (Integer, Integer) -> (Integer, Integer)
+consumePow2Pairs rem q [] = (q, rem)
+consumePow2Pairs rem q ((bit, d) :: xs) =
+  if rem >= d
+    then consumePow2Pairs (rem - d) (q + bit) xs
+    else consumePow2Pairs rem q xs
+
+||| Total O(log N) binary integer division and remainder on positive integers (`assert_total`-free).
+public export
+divModIntegerPos : Integer -> Integer -> (Integer, Integer)
+divModIntegerPos num den =
+  if den <= 0 || num <= 0
+    then (0, if num <= 0 then 0 else num)
+    else consumePow2Pairs num 0 (buildPow2Pairs 128 num 1 den [])
+
+||| Total O(log N) binary integer quotient on positive integers (`assert_total`-free).
+public export
+divIntegerPos : Integer -> Integer -> Integer
+divIntegerPos num den = fst (divModIntegerPos num den)
+
+public export
 intToBoxInt : Integer -> BoxInt
 intToBoxInt n = MkBoxInt n
 
-%inline public export
-integerToBoxInt : Integer -> BoxInt
-integerToBoxInt n = MkBoxInt n
-
-%inline public export
+public export
 natToBoxInt : Nat -> BoxInt
 natToBoxInt n = MkBoxInt (natToInteger n)
+
+||| Total binary quotient and remainder by 4 directly on non-negative `BoxInt` (`assert_total`-free).
+public export
+divMod4Box : BoxInt -> (BoxInt, BoxInt)
+divMod4Box (MkBoxInt v) =
+  if v <= 0
+    then (MkBoxInt 0, MkBoxInt 0)
+    else let (q, r) = divModIntegerPos v 4
+         in (MkBoxInt q, MkBoxInt r)
+
+||| Symmetric truncating division by 4 directly on signed `BoxInt` (`assert_total`-free).
+public export
+tdiv4Box : BoxInt -> BoxInt
+tdiv4Box (MkBoxInt v) =
+  if v >= 0
+    then MkBoxInt (divIntegerPos v 4)
+    else MkBoxInt (-(divIntegerPos (-v) 4))
 
 %inline public export
 addBox : BoxInt -> BoxInt -> BoxInt
@@ -128,11 +172,6 @@ public export
 boxToNat : BoxInt -> Nat
 boxToNat (MkBoxInt v) = if v <= 0 then 0 else integerToNat v
 
-||| Canonical alias for boxToNat.
-public export
-boxIntToNat : BoxInt -> Nat
-boxIntToNat = boxToNat
-
 public export
 Cast BoxInt Nat where
   cast = boxToNat
@@ -154,26 +193,6 @@ Ord BoxInt where
 public export
 Show BoxInt where
   show (MkBoxInt a) = "[" ++ show a ++ "]"
-
-%inline public export
-boxAdd : BoxInt -> BoxInt -> BoxInt
-boxAdd = addBox
-
-%inline public export
-boxSub : BoxInt -> BoxInt -> BoxInt
-boxSub = subBox
-
-%inline public export
-boxMult : BoxInt -> BoxInt -> BoxInt
-boxMult (MkBoxInt a) (MkBoxInt b) = MkBoxInt (a * b)
-
-%inline public export
-boxMul : BoxInt -> BoxInt -> BoxInt
-boxMul = mulBox
-
-%inline public export
-natToBox : Nat -> BoxInt
-natToBox = natToBoxInt
 
 ------------------------------------------------------------------------
 -- 2. LATTICE MEET/JOIN & CONSTRUCTIVE NON-ZERO RECOGNIZER (`Dec`)

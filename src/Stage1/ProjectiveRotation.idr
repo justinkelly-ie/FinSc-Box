@@ -182,25 +182,10 @@ pushforwardRotation3 p = pushforwardMSet (rotateVectorScaled p)
 -- 5. PASSIVE ROTATED MULTISET OBSERVER VIEW
 ------------------------------------------------------------------------
 
-||| Passive observer view over a 3D multiset under a projective rotation proportion.
-public export
-record RotatedMSetView where
-  constructor MkRotatedMSetView
-  proportion : ProjectiveProportion
-  baseState  : MSetBox (Vect 3 BoxInt)
-
-public export
-RotatedCarrierView : Type
-RotatedCarrierView = RotatedMSetView
-
 ||| Zero-allocation coordinate lookup through the rotated frame:
 ||| Queries the base multiset at the inverse rotated coordinate.
 public export
 lookupRotatedMSet : ProjectiveProportion -> Vect 3 BoxInt -> MSetBox (Vect 3 BoxInt) -> BoxInt
 lookupRotatedMSet p v m =
   lookupBox (rotateVectorScaled (inverseProportion p) v) m
-
-public export
-lookupRotatedCarrier : ProjectiveProportion -> Vect 3 BoxInt -> MSetBox (Vect 3 BoxInt) -> BoxInt
-lookupRotatedCarrier = lookupRotatedMSet
 

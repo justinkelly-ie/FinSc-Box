@@ -30,11 +30,6 @@ boxNodeCount : Box c k -> Nat
 boxNodeCount BoxLeaf             = Z
 boxNodeCount (BoxNode _ l _ _ r) = S (boxNodeCount l + boxNodeCount r)
 
-||| Alias for total node count in a `Box c k`.
-public export
-boxTreeSize : Box c k -> Nat
-boxTreeSize = boxNodeCount
-
 ||| Exponential height upper bound `2^h` for AVL capacity fuel.
 public export
 pow2BoxBound : Nat -> Nat
@@ -149,11 +144,6 @@ lookupBoxBy lt eq val (BoxNode _ l x w r) =
   else if lt val x then lookupBoxBy lt eq val l
   else lookupBoxBy lt eq val r
 
-||| Alias for `lookupBoxBy`.
-public export
-lookupBoxTreeBy : MultisetWeight c => (lt : k -> k -> Bool) -> (eq : k -> k -> Bool) -> k -> Box c k -> c
-lookupBoxTreeBy = lookupBoxBy
-
 ||| Comparator-parameterised O(log N) canonical overwrite with zero-pruning.
 public export
 setBoxBy : MultisetWeight c => (lt : k -> k -> Bool) -> (eq : k -> k -> Bool) -> k -> c -> Box c k -> Box c k
@@ -165,11 +155,6 @@ setBoxBy lt eq val w (BoxNode _ l x cur r) =
     else if lt val x
       then balanceBoxNode (setBoxBy lt eq val w l) x cur r
       else balanceBoxNode l x cur (setBoxBy lt eq val w r)
-
-||| Alias for `setBoxBy`.
-public export
-setBoxTreeBy : MultisetWeight c => (lt : k -> k -> Bool) -> (eq : k -> k -> Bool) -> k -> c -> Box c k -> Box c k
-setBoxTreeBy = setBoxBy
 
 ||| Comparator-parameterised O(log N) accumulating addition with zero-pruning.
 public export
@@ -185,20 +170,10 @@ addBoxBy lt eq val dw node@(BoxNode _ l x cur r) =
       then balanceBoxNode (addBoxBy lt eq val dw l) x cur r
       else balanceBoxNode l x cur (addBoxBy lt eq val dw r)
 
-||| Alias for `addBoxBy`.
-public export
-addBoxTreeBy : MultisetWeight c => (lt : k -> k -> Bool) -> (eq : k -> k -> Bool) -> k -> c -> Box c k -> Box c k
-addBoxTreeBy = addBoxBy
-
 ||| Looks up a key in `Box c k`, returning `zeroWeight` when absent.
 public export
 lookupBox : (Ord k, MultisetWeight c) => k -> Box c k -> c
 lookupBox = lookupBoxBy (<) (==)
-
-||| Alias for `lookupBox`.
-public export
-lookupBoxTree : (Ord k, MultisetWeight c) => k -> Box c k -> c
-lookupBoxTree = lookupBox
 
 ||| Canonical zero-pruning overwrite: sets `target` to `val`, deleting the node
 ||| whenever `isZero val` holds so `BoxLeaf` remains the unique canonical zero.
@@ -206,30 +181,10 @@ public export
 setBox : (Ord k, MultisetWeight c) => k -> c -> Box c k -> Box c k
 setBox = setBoxBy (<) (==)
 
-||| Alias for `setBox`.
-public export
-setBoxTree : (Ord k, MultisetWeight c) => k -> c -> Box c k -> Box c k
-setBoxTree = setBox
-
 ||| Accumulates `delta` onto `target` (`cur + delta`), pruning on annihilation.
 public export
 addAtKeyBox : (Ord k, MultisetWeight c) => k -> c -> Box c k -> Box c k
 addAtKeyBox = addBoxBy (<) (==)
-
-||| Accumulating AVL insertion alias (`addBoxTree` / `insertBox` / `insertBoxFast`).
-public export
-addBoxTree : (Ord k, MultisetWeight c) => k -> c -> Box c k -> Box c k
-addBoxTree = addAtKeyBox
-
-||| Accumulating AVL insertion (backward-compatible with `Stage0.Multiset.insertBox`).
-public export
-insertBox : (Ord k, MultisetWeight c) => k -> c -> Box c k -> Box c k
-insertBox = addAtKeyBox
-
-||| Fast accumulating AVL insertion alias.
-public export
-insertBoxFast : (Ord k, MultisetWeight c) => k -> c -> Box c k -> Box c k
-insertBoxFast = addAtKeyBox
 
 ------------------------------------------------------------------------
 -- 4. CONSTRUCTORS & IN-ORDER FOLDING
@@ -316,27 +271,11 @@ public export
 toAscListBox : Box c k -> List (k, c)
 toAscListBox box = toAscListBoxAcc box []
 
-||| Extracts active non-zero `(key, weight)` pairs sorted in ascending order.
-public export
-boxTreeToList : MultisetWeight c => Box c k -> List (k, c)
-boxTreeToList tree =
-  foldBoxTreeR (\x, c, acc => if isZero c then acc else (x, c) :: acc) [] tree
-
-||| Extracts sorted active `(key, weight)` pairs from a `Box c k`.
-public export
-items : MultisetWeight c => Box c k -> List (k, c)
-items = boxTreeToList
-
 ||| Maps a function over weights in `Box c k`, preserving AVL structure.
 public export
 mapBoxWeight : (c -> d) -> Box c k -> Box d k
 mapBoxWeight _ BoxLeaf = BoxLeaf
 mapBoxWeight f (BoxNode h l k w r) = BoxNode h (mapBoxWeight f l) k (f w) (mapBoxWeight f r)
-
-||| Backward-compatible alias for `mapBoxWeight`.
-public export
-mapBoxTreeWeight : (c -> d) -> Box c k -> Box d k
-mapBoxTreeWeight = mapBoxWeight
 
 ||| Evaluates the number of active non-zero weight nodes in a `Box c k` with zero heap allocation.
 public export
@@ -382,85 +321,6 @@ countNonZeroBox BoxLeaf             = Z
 countNonZeroBox (BoxNode _ l _ w r) =
   countNonZeroBox l + (if isZero w then 0 else 1) + countNonZeroBox r
 
-||| Pushes the right spine of a `Box c k` onto a descending zipper stack (largest key on top).
-public export
-pushRightBox : Box c k -> BoxZipper c k -> BoxZipper c k
-pushRightBox BoxLeaf acc = acc
-pushRightBox (BoxNode _ l k w r) acc = pushRightBox r ((k, w, l) :: acc)
-
-||| Pops the next entry from a descending `BoxZipper c k` in O(log N) worst-case, O(1) amortized.
-public export
-stepRevBoxZipper : BoxZipper c k -> Maybe (k, c, BoxZipper c k)
-stepRevBoxZipper [] = Nothing
-stepRevBoxZipper ((k, w, l) :: rest) = Just (k, w, pushRightBox l rest)
-
-||| Pops the next active non-zero entry from a descending `BoxZipper c k`.
-public export
-popNextNonZeroRevZipper : MultisetWeight c => Nat -> BoxZipper c k -> Maybe (k, c, BoxZipper c k)
-popNextNonZeroRevZipper Z _ = Nothing
-popNextNonZeroRevZipper (S fuel) stk =
-  case stk of
-    [] => Nothing
-    ((k, w, l) :: rest) =>
-      let nextStk = pushRightBox l rest
-      in if isZero w then popNextNonZeroRevZipper fuel nextStk else Just (k, w, nextStk)
-
-||| Bidirectional McBride one-hole zipper centered around a pivot key, streaming
-||| descending (`< pivot`) and ascending (`> pivot`) entries outward in radial shells.
-public export
-record RadialBoxZipper (c : Type) (k : Type) where
-  constructor MkRadialZipper
-  originEntry : Maybe (k, c)
-  negDesc     : BoxZipper c k
-  posAsc      : BoxZipper c k
-
-||| Single O(log N) root-to-pivot descent splitting a `Box c k` into opposing outward spines.
-public export
-initRadialZipper : Ord k => k -> Box c k -> RadialBoxZipper c k
-initRadialZipper pivot root = descend root [] []
-  where
-    descend : Box c k -> BoxZipper c k -> BoxZipper c k -> RadialBoxZipper c k
-    descend BoxLeaf negStk posStk = MkRadialZipper Nothing negStk posStk
-    descend (BoxNode _ l k w r) negStk posStk =
-      case compare k pivot of
-        LT => descend r ((k, w, l) :: negStk) posStk
-        GT => descend l negStk ((k, w, r) :: posStk)
-        EQ => MkRadialZipper (Just (k, w)) (pushRightBox l negStk) (pushLeftBox r posStk)
-
-||| Single outward radial shell yielded by `stepRadialZipper`.
-public export
-data RadialShellStep : (c : Type) -> (k : Type) -> Type where
-  RadialDone   : RadialShellStep c k
-  RadialOrigin : (k, c) -> RadialBoxZipper c k -> RadialShellStep c k
-  RadialSingle : (k, c) -> RadialBoxZipper c k -> RadialShellStep c k
-  RadialPair   : (k, c) -> (k, c) -> RadialBoxZipper c k -> RadialShellStep c k
-
-private
-stepRadialOuter : MultisetWeight c =>
-                  Nat ->
-                  BoxZipper c k ->
-                  BoxZipper c k ->
-                  RadialShellStep c k
-stepRadialOuter fuel neg pos =
-  case (popNextNonZeroRevZipper fuel neg, popNextNonZeroZipper fuel pos) of
-    (Nothing, Nothing) => RadialDone
-    (Just (kn, wn, neg'), Nothing) =>
-      RadialSingle (kn, wn) (MkRadialZipper Nothing neg' [])
-    (Nothing, Just (kp, wp, pos')) =>
-      RadialSingle (kp, wp) (MkRadialZipper Nothing [] pos')
-    (Just (kn, wn, neg'), Just (kp, wp, pos')) =>
-      RadialPair (kn, wn) (kp, wp) (MkRadialZipper Nothing neg' pos')
-
-||| Steps outward by one symmetric shell from a `RadialBoxZipper c k` without list allocation.
-public export
-stepRadialZipper : MultisetWeight c => Nat -> RadialBoxZipper c k -> RadialShellStep c k
-stepRadialZipper fuel (MkRadialZipper (Just (k0, w0)) neg pos) =
-  if not (isZero w0)
-    then RadialOrigin (k0, w0) (MkRadialZipper Nothing neg pos)
-    else stepRadialOuter fuel neg pos
-stepRadialZipper fuel (MkRadialZipper Nothing neg pos) =
-  stepRadialOuter fuel neg pos
-
 ||| Fueled left-spine comparison on non-zero entries of two `Box c k` trees.
 public export
 compareBoxZipperFuel : (Ord k, MultisetWeight c) =>
@@ -492,11 +352,6 @@ structuralBoxTreeEqual t1 t2 =
         (Just (k1, w1, r1), Just (k2, w2, r2)) =>
           (k1 == k2) && (w1 == w2) && go fuel r1 r2
         _ => False
-
-||| Equality alias for `structuralBoxTreeEqual`.
-public export
-boxTreeEqual : (Eq k, MultisetWeight c) => Box c k -> Box c k -> Bool
-boxTreeEqual = structuralBoxTreeEqual
 
 public export
 (Eq k, MultisetWeight c) => Eq (Box c k) where
