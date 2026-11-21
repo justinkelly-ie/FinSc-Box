@@ -13,5 +13,7 @@ import public Stage1.ConvolutionAdmissibility
 import public Stage1.Views
 import public Stage1.Lenses
 import public Stage1.ProjectiveRotation
+import public Stage1.MultisetCodec
+import public Stage1.BlackRedZoom
 
 %default total
