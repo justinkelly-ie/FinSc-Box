@@ -126,8 +126,8 @@ Vexel : Type
 Vexel = Space 1
 
 public export
-Maxel : Type
-Maxel = Space 2
+PixelMSet : Type
+PixelMSet = Space 2
 
 public export
 Voxel : Type

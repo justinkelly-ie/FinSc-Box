@@ -93,10 +93,10 @@ public export
 VexelStream : (0 t : Time) -> Type
 VexelStream t = SpaceStream t 1
 
-||| Streaming 2D planar pixel multiset (`Maxel = Space 2`).
+||| Streaming 2D planar pixel multiset (`PixelMSet = Space 2`).
 public export
-MaxelStream : (0 t : Time) -> Type
-MaxelStream t = SpaceStream t 2
+PixelMSetStream : (0 t : Time) -> Type
+PixelMSetStream t = SpaceStream t 2
 
 ||| Streaming 3D spatial volume multiset (`Voxel = Space 3`).
 public export
@@ -336,7 +336,7 @@ freezeMSetBoxStream g cap yieldBudget stepBudget strm =
   freezeTimeStreamWith g cap (MkGohFuel yieldBudget) stepBudget addMSet emptyMSet strm
 
 ||| Specialised freeze-out runner for `SpaceStream t dim` (`PointMSetStream`, `VexelStream`,
-||| `MaxelStream`, `VoxelStream`, `BoxelStream`) at retrograde layer depth `g` and capacity `cap`.
+||| `PixelMSetStream`, `VoxelStream`, `BoxelStream`) at retrograde layer depth `g` and capacity `cap`.
 public export
 freezeSpaceStream :
   {dim : Nat} ->

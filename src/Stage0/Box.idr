@@ -414,6 +414,33 @@ filterBox : (Ord k, MultisetWeight c) => (k -> Bool) -> Box c k -> Box c k
 filterBox p t =
   foldBox (\k, w, acc => if p k then setBox k w acc else acc) BoxLeaf t
 
+||| Unsigned support indicator (`oneWeight` on every non-zero key, `zeroWeight` pruned).
+public export
+supportBox : MultisetWeight c => Box c k -> Box c k
+supportBox = mapBoxWeight (\w => if isZero w then zeroWeight else oneWeight)
+
+||| Single-pass partition of `Box c k` into `(matching, nonMatching)` by key predicate.
+public export
+partitionBox : (Ord k, MultisetWeight c) => (k -> Bool) -> Box c k -> (Box c k, Box c k)
+partitionBox p t =
+  foldBox (\k, w, (yesB, noB) =>
+             if p k then (setBox k w yesB, noB) else (yesB, setBox k w noB))
+          (BoxLeaf, BoxLeaf) t
+
+||| Retains entries of `t` whose keys are non-zero in `mask`.
+public export
+maskByBox : (Ord k, MultisetWeight c, MultisetWeight d) => Box c k -> Box d k -> Box c k
+maskByBox BoxLeaf _ = BoxLeaf
+maskByBox _ BoxLeaf = BoxLeaf
+maskByBox t mask = filterBox (\k => not (isZero (lookupBox k mask))) t
+
+||| Retains entries of `t` whose keys are zero (absent) in `mask`.
+public export
+maskOutBox : (Ord k, MultisetWeight c, MultisetWeight d) => Box d k -> Box c k -> Box c k
+maskOutBox BoxLeaf t = t
+maskOutBox _ BoxLeaf = BoxLeaf
+maskOutBox mask t = filterBox (\k => isZero (lookupBox k mask)) t
+
 ||| Pointwise Hadamard product (`A .*. B`) on `Box c k`.
 public export
 hadamardBox : (Ord k, MultisetWeight c) => Box c k -> Box c k -> Box c k
@@ -427,25 +454,28 @@ hadamardBox t1 t2 =
           BoxLeaf
           t1
 
-||| Symmetric pointwise tropical minimum envelope (`A /\ B`) satisfying `(A /\ B) + (A \/ B) = A + B`.
+||| Combined zero-pruning pointwise envelope for two `Box c k` structures.
 public export
-minBox : (Ord k, MultisetWeight c) => Box c k -> Box c k -> Box c k
-minBox BoxLeaf BoxLeaf = BoxLeaf
-minBox t1 t2 =
+zipZeroWeightBox : (Ord k, MultisetWeight c) => (c -> c -> c) -> Box c k -> Box c k -> Box c k
+zipZeroWeightBox _ BoxLeaf BoxLeaf = BoxLeaf
+zipZeroWeightBox op t1 t2 =
   let step1 = foldBox (\k, w1, acc =>
-                         let w2   = lookupBox k t2
-                             minW = minWeight w1 w2
-                         in if isZero minW then acc else setBox k minW acc)
+                         let r = op w1 (lookupBox k t2)
+                         in if isZero r then acc else setBox k r acc)
                       BoxLeaf
                       t1
   in foldBox (\k, w2, acc =>
-                let w1 = lookupBox k t1
-                in if not (isZero w1)
-                     then acc
-                     else let minW = minWeight zeroWeight w2
-                          in if isZero minW then acc else setBox k minW acc)
+                if not (isZero (lookupBox k t1))
+                  then acc
+                  else let r = op zeroWeight w2
+                       in if isZero r then acc else setBox k r acc)
              step1
              t2
+
+||| Symmetric pointwise tropical minimum envelope (`A /\ B`) satisfying `(A /\ B) + (A \/ B) = A + B`.
+public export
+minBox : (Ord k, MultisetWeight c) => Box c k -> Box c k -> Box c k
+minBox = zipZeroWeightBox minWeight
 
 ||| Alias for pointwise infimum intersection.
 public export
@@ -455,22 +485,7 @@ intersectBox = minBox
 ||| Symmetric pointwise tropical maximum envelope (`A \/ B`).
 public export
 maxBox : (Ord k, MultisetWeight c) => Box c k -> Box c k -> Box c k
-maxBox BoxLeaf BoxLeaf = BoxLeaf
-maxBox t1 t2 =
-  let step1 = foldBox (\k, w1, acc =>
-                         let w2   = lookupBox k t2
-                             maxW = maxWeight w1 w2
-                         in if isZero maxW then acc else setBox k maxW acc)
-                      BoxLeaf
-                      t1
-  in foldBox (\k, w2, acc =>
-                let w1 = lookupBox k t1
-                in if not (isZero w1)
-                     then acc
-                     else let maxW = maxWeight zeroWeight w2
-                          in if isZero maxW then acc else setBox k maxW acc)
-             step1
-             t2
+maxBox = zipZeroWeightBox maxWeight
 
 ||| Canonical inner product (`A <.> B`) returning scalar multiplicity weight `c`.
 public export
@@ -598,66 +613,223 @@ public export
 isAntisymBox : (Ord k, MultisetWeight c) => Box c (k, k) -> Bool
 isAntisymBox m = transposeBox m == negateBox m
 
-||| Coordinate-generic square 2D Maxel carrier (`Box c (k, k)`).
+||| Decides whether a square 2D `Box c (k, k)` is symmetric (`transposeBox m == m`).
 public export
-SquareMaxel : Type -> Type -> Type
-SquareMaxel c k = Box c (k, k)
-
-||| Symmetric pair-edge Maxel singleton: `w * ([a, b] + [b, a])` for `a /= b`, or `w * [a, a]` on the diagonal.
-||| Guarantees `isSymBox == True`.
-public export
-mkSymEdge : (Ord k, MultisetWeight c) => k -> k -> c -> SquareMaxel c k
-mkSymEdge a b w =
-  if isZero w
-    then BoxLeaf
-    else if a == b
-      then singletonBox (a, a) w
-      else setBox (b, a) w (singletonBox (a, b) w)
-
-||| Updates a symmetric pair `(a, b)` and `(b, a)` to `w` (or diagonal `(a, a)` when `a == b`).
-public export
-setSymEdge : (Ord k, MultisetWeight c) => k -> k -> c -> SquareMaxel c k -> SquareMaxel c k
-setSymEdge a b w m =
-  if a == b
-    then setBox (a, a) w m
-    else setBox (b, a) w (setBox (a, b) w m)
-
-||| Decides whether a square 2D `SquareMaxel c k` is symmetric (`transposeBox m == m`).
-public export
-isSymBox : (Ord k, MultisetWeight c) => SquareMaxel c k -> Bool
+isSymBox : (Ord k, MultisetWeight c) => Box c (k, k) -> Bool
 isSymBox m = transposeBox m == m
 
-||| Unnormalized symmetric part `m + transposeBox m` of a `SquareMaxel c k`.
+||| Diagonal embedding of a 1D `Box c k` onto the coincidence diagonal `(k, k)`.
 public export
-symPartBox : (Ord k, MultisetWeight c) => SquareMaxel c k -> SquareMaxel c k
-symPartBox m = unionBox m (transposeBox m)
-
-||| Unnormalized antisymmetric part `m - transposeBox m` of a `SquareMaxel c k`.
-public export
-antisymPartBox : (Ord k, MultisetWeight c) => SquareMaxel c k -> SquareMaxel c k
-antisymPartBox m = subBox m (transposeBox m)
-
-||| Diagonal embedding of a 1D `Box c k` onto the coincidence diagonal `(k, k)` of a `SquareMaxel c k`.
-public export
-diagEmbedBox : (Ord k, MultisetWeight c) => Box c k -> SquareMaxel c k
+diagEmbedBox : (Ord k, MultisetWeight c) => Box c k -> Box c (k, k)
 diagEmbedBox BoxLeaf = BoxLeaf
 diagEmbedBox m =
   foldBox (\k, w, acc =>
              if isZero w then acc else setBox (k, k) w acc)
           BoxLeaf m
 
-||| Simultaneous pair-shift stencil convolution on `SquareMaxel c k`:
-||| shifts both endpoints `(a, b) -> (shiftAdd a s, shiftAdd b s)` for each shift `s` in `stencil`,
-||| preserving diagonal, symmetric, and antisymmetric Maxel subspaces identically.
+||| Symmetry form index of a 2-parameter Wildberger `Maxel`, type-bound to `(a, b)`:
+||| - `GeneralForm` : arbitrary rectangular `(a, b)` or unstructured square `(k, k)`
+||| - `SymForm`     : symmetric square `(k, k)` (`M[b, a] = +M[a, b]`), half-stored on `a <= b`
+||| - `AntisymForm` : antisymmetric square `(k, k)` (`M[b, a] = -M[a, b]`, `M[a, a] = 0`), half-stored on `a < b`
 public export
-convolvePairStencil :
+data MaxelForm : (a : Type) -> (b : Type) -> Type where
+  GeneralForm : MaxelForm a b
+  SymForm     : MaxelForm k k
+  AntisymForm : MaxelForm k k
+
+||| Form index after transposing rows and columns.
+public export
+transposeMaxelForm : MaxelForm a b -> MaxelForm b a
+transposeMaxelForm GeneralForm = GeneralForm
+transposeMaxelForm SymForm     = SymForm
+transposeMaxelForm AntisymForm = AntisymForm
+
+||| Canonical Wildberger 2-index Maxel `sum w_{ab} [a, b]` type-bound to `(a, b)`.
+||| Uses canonical half-storage (`a <= b` / `a < b`) and O(1) structural symmetries when `a = b`.
+public export
+record Maxel (c : Type) (a : Type) (b : Type) (form : MaxelForm a b) where
+  constructor MkMaxel
+  rawMaxelBox : Box c (a, b)
+
+public export
+(Eq a, Eq b, MultisetWeight c) => Eq (Maxel c a b form) where
+  m1 == m2 = m1.rawMaxelBox == m2.rawMaxelBox
+
+public export
+emptyMaxel : Maxel c a b form
+emptyMaxel = MkMaxel BoxLeaf
+
+public export
+isEmptyMaxel : Maxel c a b form -> Bool
+isEmptyMaxel (MkMaxel BoxLeaf) = True
+isEmptyMaxel _                 = False
+
+public export
+maxelNodeCount : MultisetWeight c => Maxel c a b form -> Nat
+maxelNodeCount m = treeSizeNonZero m.rawMaxelBox
+
+public export
+lookupSymBox : Ord k => MultisetWeight c => k -> k -> Box c (k, k) -> c
+lookupSymBox x y m =
+  if x <= y then lookupBox (x, y) m else lookupBox (y, x) m
+
+public export
+lookupAntisymBox : Ord k => MultisetWeight c => k -> k -> Box c (k, k) -> c
+lookupAntisymBox x y m =
+  case compare x y of
+    LT => lookupBox (x, y) m
+    EQ => zeroWeight
+    GT => negWeight (lookupBox (y, x) m)
+
+public export
+setSymHalfBox : Ord k => MultisetWeight c => k -> k -> c -> Box c (k, k) -> Box c (k, k)
+setSymHalfBox x y w m =
+  if x <= y then setBox (x, y) w m else setBox (y, x) w m
+
+public export
+setAntisymHalfBox : Ord k => MultisetWeight c => k -> k -> c -> Box c (k, k) -> Box c (k, k)
+setAntisymHalfBox x y w m =
+  case compare x y of
+    LT => setBox (x, y) w m
+    EQ => m
+    GT => setBox (y, x) (negWeight w) m
+
+public export
+addSymHalfBox : Ord k => MultisetWeight c => k -> k -> c -> Box c (k, k) -> Box c (k, k)
+addSymHalfBox x y w m =
+  if isZero w then m
+  else if x <= y then addAtKeyBox (x, y) w m else addAtKeyBox (y, x) w m
+
+public export
+addAntisymHalfBox : Ord k => MultisetWeight c => k -> k -> c -> Box c (k, k) -> Box c (k, k)
+addAntisymHalfBox x y w m =
+  if isZero w then m
+  else case compare x y of
+    LT => addAtKeyBox (x, y) w m
+    EQ => m
+    GT => addAtKeyBox (y, x) (negWeight w) m
+
+public export
+lookupMaxel :
+  {auto ordA : Ord a} -> {auto ordB : Ord b} -> {auto mw : MultisetWeight c} ->
+  {form : MaxelForm a b} -> a -> b -> Maxel c a b form -> c
+lookupMaxel {form = GeneralForm} x y (MkMaxel m) = lookupBox (x, y) m
+lookupMaxel {form = SymForm}     x y (MkMaxel m) = lookupSymBox @{ordA} @{mw} x y m
+lookupMaxel {form = AntisymForm} x y (MkMaxel m) = lookupAntisymBox @{ordA} @{mw} x y m
+
+public export
+setMaxelEdge :
+  {auto ordA : Ord a} -> {auto ordB : Ord b} -> {auto mw : MultisetWeight c} ->
+  {form : MaxelForm a b} -> a -> b -> c -> Maxel c a b form -> Maxel c a b form
+setMaxelEdge {form = GeneralForm} x y w (MkMaxel m) = MkMaxel (setBox (x, y) w m)
+setMaxelEdge {form = SymForm}     x y w (MkMaxel m) = MkMaxel (setSymHalfBox @{ordA} @{mw} x y w m)
+setMaxelEdge {form = AntisymForm} x y w (MkMaxel m) = MkMaxel (setAntisymHalfBox @{ordA} @{mw} x y w m)
+
+public export
+addAtMaxelEdge :
+  {auto ordA : Ord a} -> {auto ordB : Ord b} -> {auto mw : MultisetWeight c} ->
+  {form : MaxelForm a b} -> a -> b -> c -> Maxel c a b form -> Maxel c a b form
+addAtMaxelEdge {form = GeneralForm} x y w (MkMaxel m) = MkMaxel (addAtKeyBox (x, y) w m)
+addAtMaxelEdge {form = SymForm}     x y w (MkMaxel m) = MkMaxel (addSymHalfBox @{ordA} @{mw} x y w m)
+addAtMaxelEdge {form = AntisymForm} x y w (MkMaxel m) = MkMaxel (addAntisymHalfBox @{ordA} @{mw} x y w m)
+
+public export
+singletonMaxelEdge :
+  {auto ordA : Ord a} -> {auto ordB : Ord b} -> {auto mw : MultisetWeight c} ->
+  {form : MaxelForm a b} -> a -> b -> c -> Maxel c a b form
+singletonMaxelEdge x y w = setMaxelEdge @{ordA} @{ordB} @{mw} {form} x y w emptyMaxel
+
+public export
+unionSameBox : Ord k => MultisetWeight c => Box c (k, k) -> Box c (k, k) -> Box c (k, k)
+unionSameBox = unionBox
+
+public export
+subSameBox : Ord k => MultisetWeight c => Box c (k, k) -> Box c (k, k) -> Box c (k, k)
+subSameBox = subBox
+
+public export
+addMaxel :
+  {auto ordA : Ord a} -> {auto ordB : Ord b} -> {auto mw : MultisetWeight c} ->
+  {form : MaxelForm a b} -> Maxel c a b form -> Maxel c a b form -> Maxel c a b form
+addMaxel {form = GeneralForm} (MkMaxel m1) (MkMaxel m2) = MkMaxel (unionBox m1 m2)
+addMaxel {form = SymForm}     (MkMaxel m1) (MkMaxel m2) = MkMaxel (unionSameBox @{ordA} @{mw} m1 m2)
+addMaxel {form = AntisymForm} (MkMaxel m1) (MkMaxel m2) = MkMaxel (unionSameBox @{ordA} @{mw} m1 m2)
+
+public export
+subMaxel :
+  {auto ordA : Ord a} -> {auto ordB : Ord b} -> {auto mw : MultisetWeight c} ->
+  {form : MaxelForm a b} -> Maxel c a b form -> Maxel c a b form -> Maxel c a b form
+subMaxel {form = GeneralForm} (MkMaxel m1) (MkMaxel m2) = MkMaxel (subBox m1 m2)
+subMaxel {form = SymForm}     (MkMaxel m1) (MkMaxel m2) = MkMaxel (subSameBox @{ordA} @{mw} m1 m2)
+subMaxel {form = AntisymForm} (MkMaxel m1) (MkMaxel m2) = MkMaxel (subSameBox @{ordA} @{mw} m1 m2)
+
+public export
+negateMaxel : MultisetWeight c => Maxel c a b form -> Maxel c a b form
+negateMaxel (MkMaxel m) = MkMaxel (negateBox m)
+
+public export
+scaleMaxel : MultisetWeight c => c -> Maxel c a b form -> Maxel c a b form
+scaleMaxel s (MkMaxel m) = MkMaxel (scaleBox s m)
+
+public export
+transposeMaxel :
+  {auto ordA : Ord a} -> {auto ordB : Ord b} -> MultisetWeight c =>
+  {form : MaxelForm a b} -> Maxel c a b form -> Maxel c b a (transposeMaxelForm form)
+transposeMaxel {form = GeneralForm} (MkMaxel m) = MkMaxel (transposeBox m)
+transposeMaxel {form = SymForm}     m           = m
+transposeMaxel {form = AntisymForm} (MkMaxel m) = MkMaxel (negateBox m)
+
+public export
+traceMaxel : (Ord k, MultisetWeight c) => {form : MaxelForm k k} -> Maxel c k k form -> c
+traceMaxel {form = AntisymForm} _           = zeroWeight
+traceMaxel                      (MkMaxel m) = traceBox m
+
+public export
+diagEmbedMaxel : (Ord k, MultisetWeight c) => Box c k -> Maxel c k k SymForm
+diagEmbedMaxel b = MkMaxel (diagEmbedBox b)
+
+public export
+hadamardAntisymSquare : (Ord k, MultisetWeight c) => Maxel c k k AntisymForm -> Maxel c k k SymForm
+hadamardAntisymSquare (MkMaxel m) = MkMaxel (hadamardBox m m)
+
+public export
+toGeneralMaxel : (Ord k, MultisetWeight c) => {form : MaxelForm k k} -> Maxel c k k form -> Maxel c k k GeneralForm
+toGeneralMaxel {form = GeneralForm} m = m
+toGeneralMaxel {form = SymForm} (MkMaxel m) =
+  MkMaxel $ foldBox (\(x, y), w, acc =>
+                       if x == y
+                         then addAtKeyBox (x, x) w acc
+                         else addAtKeyBox (y, x) w (addAtKeyBox (x, y) w acc))
+                    BoxLeaf m
+toGeneralMaxel {form = AntisymForm} (MkMaxel m) =
+  MkMaxel $ foldBox (\(x, y), w, acc =>
+                       if x == y
+                         then acc
+                         else addAtKeyBox (y, x) (negWeight w) (addAtKeyBox (x, y) w acc))
+                    BoxLeaf m
+
+public export
+convolveMaxelStencil :
   (Ord k, MultisetWeight c) =>
+  {form : MaxelForm k k} ->
   (k -> k -> k) ->
-  SquareMaxel c k ->
+  Maxel c k k form ->
   Box c k ->
-  SquareMaxel c k
-convolvePairStencil shiftAdd =
-  pairBoxWith (\(a, b), s => (shiftAdd a s, shiftAdd b s))
+  Maxel c k k form
+convolveMaxelStencil _ (MkMaxel BoxLeaf) _ = MkMaxel BoxLeaf
+convolveMaxelStencil _ _ BoxLeaf           = MkMaxel BoxLeaf
+convolveMaxelStencil {form} shiftAdd (MkMaxel m) stencil =
+  MkMaxel $ foldBox (\(x, y), w1, outer =>
+                       foldBox (\s, w2, inner =>
+                                  let x'   = shiftAdd x s
+                                      y'   = shiftAdd y s
+                                      prod = mulWeight w1 w2
+                                  in case form of
+                                       GeneralForm => if isZero prod then inner else addAtKeyBox (x', y') prod inner
+                                       SymForm     => addSymHalfBox x' y' prod inner
+                                       AntisymForm => addAntisymHalfBox x' y' prod inner)
+                               outer stencil)
+                    BoxLeaf m
 
 ||| Sparse 4-direction Laurent stencil `[+dx, -dx, +dy, -dy]` over any `GroupCoord k`.
 public export
@@ -695,6 +867,14 @@ scaleDivPruneBox den minCut b =
                         mag            = if qv < 0 then -qv else qv
                     in if mag >= minCut && qv /= 0 then setBox k q acc else acc)
                  BoxLeaf b
+
+public export
+pruneMinMaxel : (Ord a, Ord b) => Integer -> Maxel BoxInt a b form -> Maxel BoxInt a b form
+pruneMinMaxel minCut (MkMaxel m) = MkMaxel (pruneMinBox minCut m)
+
+public export
+scaleDivPruneMaxel : (Ord a, Ord b) => (den, minCut : Integer) -> Maxel BoxInt a b form -> Maxel BoxInt a b form
+scaleDivPruneMaxel den minCut (MkMaxel m) = MkMaxel (scaleDivPruneBox den minCut m)
 
 public export
 laurentGreenLoop : Ord k =>
@@ -738,6 +918,14 @@ public export
 public export
 (Ord k, MultisetWeight c) => Monoid (Box c k) where
   neutral = BoxLeaf
+
+public export
+(Ord a, Ord b, MultisetWeight c) => Semigroup (Maxel c a b form) where
+  (<+>) (MkMaxel m1) (MkMaxel m2) = MkMaxel (unionBox m1 m2)
+
+public export
+(Ord a, Ord b, MultisetWeight c) => Monoid (Maxel c a b form) where
+  neutral = emptyMaxel
 
 public export
 (Ord k, MultisetWeight c) => WeightedMultisetAlgebra c (Box c k) where

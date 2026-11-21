@@ -1,5 +1,5 @@
 module Stage1.Carrier.Maxel
 
-import public Stage1.Basis.Space
+import public Stage0.Box
 
 %default total
