@@ -339,6 +339,40 @@ freezeTimeStreamWith g cap yieldFuel stepBudget combine initAcc (MkTimeStream st
         StreamYield term =>
           loop yRem sRem (S currTick) (S yUsed) (S sUsed) (combine term acc)
 
+||| Stateful Streaming Freeze-Out Evaluator over an initial state `initA : a` populated at `t = 0`:
+||| At each tick, `stepFn acc` emits `(StreamStep a, yieldCost, skipsSaved)`:
+||| - `StreamDone`      : ground-state relaxation (`NaturalCompletion`)
+||| - `StreamSkip`      : consumes `0` `yieldFuel` and `1` `stepBudget`, banking `skipsSaved`
+||| - `StreamYield nxt` : if `remYield < yieldCost`, freezes out with `YieldExhausted`;
+|||                       otherwise consumes `yieldCost` of `yieldFuel` and `1` `stepBudget`.
+public export
+freezeStateStreamWith :
+  (g          : Nat) ->
+  (cap        : Nat) ->
+  (yieldFuel  : GohFuel cap) ->
+  (stepBudget : Nat) ->
+  (stepFn     : a -> (StreamStep a, Nat, Nat)) ->
+  (initA      : a) ->
+  (SolidifiedStream (StaticTime (- cast g) (cast cap)) cap a, Nat)
+freezeStateStreamWith g cap yieldFuel stepBudget stepFn initA =
+  loop (gohSteps yieldFuel) stepBudget 0 0 0 0 initA
+  where
+    loop : (yRem, sRem, currTick, yUsed, sUsed, skAcc : Nat) ->
+           (acc : a) ->
+           (SolidifiedStream (StaticTime (- cast g) (cast cap)) cap a, Nat)
+    loop yRem Z currTick yUsed sUsed skAcc acc =
+      (MkSolidifiedStream acc StepHorizonReached currTick yUsed sUsed (MkGohFuel yRem) 0, skAcc)
+    loop yRem (S sRem) currTick yUsed sUsed skAcc acc =
+      case stepFn acc of
+        (StreamDone, _, sk) =>
+          (MkSolidifiedStream acc NaturalCompletion currTick yUsed sUsed (MkGohFuel yRem) (S sRem), skAcc + sk)
+        (StreamSkip, _, sk) =>
+          loop yRem sRem (S currTick) yUsed (S sUsed) (skAcc + sk) acc
+        (StreamYield nxt, yCost, sk) =>
+          if yRem < yCost
+            then (MkSolidifiedStream acc YieldExhausted currTick yUsed sUsed (MkGohFuel yRem) (S sRem), skAcc)
+            else loop (minus yRem yCost) sRem (S currTick) (yUsed + yCost) (S sUsed) (skAcc + sk) nxt
+
 ||| Specialised freeze-out runner for `MSetBoxStream t k` (and `SpaceStream t dim`)
 ||| using explicit yield capacity `yieldBudget` and causal search horizon `stepBudget`.
 public export
