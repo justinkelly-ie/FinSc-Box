@@ -64,6 +64,25 @@ public export
 Functor (TimeStream t) where
   map f (MkTimeStream s at) = MkTimeStream s (\n => map f (at n))
 
+||| Local exact integer Bresenham pacing step with base tick budget `budget > 0`,
+||| nonnegative local load `load`, and signed pacing balance `bal` (`MkBoxInt 0` at zero load).
+||| - `budget <= 0`         : unpaced pass-through `(StreamYield (), MkBoxInt 0)`.
+||| - `bal + c <= budget`   : emits `StreamYield ()` with `nextBal = max 0 (bal + c)` (`c = max 0 load`).
+||| - `bal + c > budget`    : emits `StreamSkip` with `nextBal = bal - budget`.
+||| Over `budget + c` ticks from `MkBoxInt 0` at constant load `c >= 0`, this emits
+||| exact `budget` yields and `c` skips, returning cleanly to `MkBoxInt 0`.
+public export
+paceStreamStep : (budget : Integer) -> (load : Integer) -> (bal : BoxInt) -> (StreamStep (), BoxInt)
+paceStreamStep budget load (MkBoxInt b) =
+  if budget <= 0
+    then (StreamYield (), MkBoxInt 0)
+    else
+      let c     = if load < 0 then 0 else load
+          nextB = b + c
+      in if nextB <= budget
+           then (StreamYield (), MkBoxInt (if nextB < 0 then 0 else nextB))
+           else (StreamSkip, MkBoxInt (b - budget))
+
 ------------------------------------------------------------------------
 -- 2. STREAMING VARIANTS OF BASE TYPES (ALPHABETICALLY ALIGNED `*Stream`)
 ------------------------------------------------------------------------
