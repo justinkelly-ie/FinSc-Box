@@ -17,15 +17,11 @@ data AntiBoxView : (c : Type) -> Type where
   PopRedBox   : (term : HereditaryMSet c) -> (rest : HereditaryMSet c) -> AntiBoxView c
 
 public export
-popMinNode : Box c k -> Maybe (k, c, Box c k)
-popMinNode = extractMinBox
-
-public export
 antiBoxLoop : QuantumMultiplicity c => Nat -> HereditaryMSet c -> AntiBoxView c
 antiBoxLoop Z _ = EmptyVacuum
 antiBoxLoop (S rem) (MkHMSet BoxLeaf) = EmptyVacuum
 antiBoxLoop (S rem) (MkHMSet tree@(BoxNode _ _ _ _ _)) =
-  case popMinNode tree of
+  case extractMinBox tree of
     Nothing => EmptyVacuum
     Just (term, weight, tailTree) =>
       case peelQuantum weight of
@@ -57,14 +53,7 @@ record DualChannelView (c : Type) where
 public export
 splitChannels : MultisetWeight c => HereditaryMSet c -> DualChannelView c
 splitChannels (MkHMSet box) =
-  let (pBox, nBox) =
-        foldBox (\k, w, (pAcc, nAcc) =>
-                  case compare w zeroWeight of
-                    GT => (setBox k w pAcc, nAcc)
-                    LT => (pAcc, setBox k (negWeight w) nAcc)
-                    EQ => (pAcc, nAcc))
-                (BoxLeaf, BoxLeaf)
-                box
+  let (pBox, nBox) = splitBoxChannels box
   in MkDualChannels (MkHMSet pBox) (MkHMSet nBox)
 
 ||| Recombines `(M_+, M_-)` via `subHMSet`, annihilating any overlapping keys.
@@ -109,7 +98,7 @@ laurentViewLoop : MultisetWeight c => Nat -> (toInt : c -> Integer) -> Hereditar
 laurentViewLoop Z _ _ = LaurentZero
 laurentViewLoop (S rem) _ (MkHMSet BoxLeaf) = LaurentZero
 laurentViewLoop (S rem) toInt (MkHMSet tree@(BoxNode _ _ _ _ _)) =
-  case popMinNode tree of
+  case extractMinBox tree of
     Nothing => LaurentZero
     Just (key, coeff, tailTree) =>
       if isZero coeff

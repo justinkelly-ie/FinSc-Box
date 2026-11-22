@@ -194,16 +194,7 @@ boundedDiffMSet m1 m2 =
 ||| Multiset Symmetric Difference: (M1 Δ M2)(x) = |M1(x) - M2(x)|.
 public export
 symmetricDiffMSet : DiscreteCoord k => MSetBox k -> MSetBox k -> MSetBox k
-symmetricDiffMSet m1 m2 =
-  let diff1 = foldBoxTreeL (\acc, (x, w1) =>
-                let w2 = lookupMSet x m2
-                    d = absBox (Stage0.BoxInt.subBox w1 w2)
-                in if boxIsNonZero d then setBox x d acc else acc) BoxLeaf m1
-  in foldBoxTreeL (\acc, (x, w2) =>
-       if boxIsNonZero (lookupMSet x m1)
-         then acc
-         else let d = absBox w2
-              in if boxIsNonZero d then setBox x d acc else acc) diff1 m2
+symmetricDiffMSet m1 m2 = mapBoxWeight absBox (subBox m1 m2)
 
 ||| Computes the stoichiometric reaction quotient on indexed multisets:
 ||| maximum number of times `reactants` is contained in `state`.

@@ -685,70 +685,27 @@ maxelNodeCount : MultisetWeight c => Maxel c a b form -> Nat
 maxelNodeCount m = treeSizeNonZero m.rawMaxelBox
 
 public export
-lookupSymBox : Ord k => MultisetWeight c => k -> k -> Box c (k, k) -> c
-lookupSymBox x y m =
-  if x <= y then lookupBox (x, y) m else lookupBox (y, x) m
-
-public export
-lookupAntisymBox : Ord k => MultisetWeight c => k -> k -> Box c (k, k) -> c
-lookupAntisymBox x y m =
+lookupHalfBox : Ord k => MultisetWeight c => (allowDiag, antisymOff : Bool) -> k -> k -> Box c (k, k) -> c
+lookupHalfBox allowDiag antisymOff x y m =
   case compare x y of
     LT => lookupBox (x, y) m
-    EQ => zeroWeight
-    GT => negWeight (lookupBox (y, x) m)
+    EQ => if allowDiag then lookupBox (x, x) m else zeroWeight
+    GT => let w = lookupBox (y, x) m in if antisymOff then negWeight w else w
 
 public export
-setSymHalfBox : Ord k => MultisetWeight c => k -> k -> c -> Box c (k, k) -> Box c (k, k)
-setSymHalfBox x y w m =
-  if x <= y then setBox (x, y) w m else setBox (y, x) w m
-
-public export
-setAntisymHalfBox : Ord k => MultisetWeight c => k -> k -> c -> Box c (k, k) -> Box c (k, k)
-setAntisymHalfBox x y w m =
-  case compare x y of
-    LT => setBox (x, y) w m
-    EQ => m
-    GT => setBox (y, x) (negWeight w) m
-
-public export
-addSymHalfBox : Ord k => MultisetWeight c => k -> k -> c -> Box c (k, k) -> Box c (k, k)
-addSymHalfBox x y w m =
-  if isZero w then m
-  else if x <= y then addAtKeyBox (x, y) w m else addAtKeyBox (y, x) w m
-
-public export
-addAntisymHalfBox : Ord k => MultisetWeight c => k -> k -> c -> Box c (k, k) -> Box c (k, k)
-addAntisymHalfBox x y w m =
-  if isZero w then m
-  else case compare x y of
-    LT => addAtKeyBox (x, y) w m
-    EQ => m
-    GT => addAtKeyBox (y, x) (negWeight w) m
-
-public export
-lookupDiagAntisymBox : Ord k => MultisetWeight c => k -> k -> Box c (k, k) -> c
-lookupDiagAntisymBox x y m =
-  case compare x y of
-    LT => lookupBox (x, y) m
-    EQ => lookupBox (x, x) m
-    GT => negWeight (lookupBox (y, x) m)
-
-public export
-setDiagAntisymHalfBox : Ord k => MultisetWeight c => k -> k -> c -> Box c (k, k) -> Box c (k, k)
-setDiagAntisymHalfBox x y w m =
-  case compare x y of
-    LT => setBox (x, y) w m
-    EQ => setBox (x, x) w m
-    GT => setBox (y, x) (negWeight w) m
-
-public export
-addDiagAntisymHalfBox : Ord k => MultisetWeight c => k -> k -> c -> Box c (k, k) -> Box c (k, k)
-addDiagAntisymHalfBox x y w m =
-  if isZero w then m
-  else case compare x y of
-    LT => addAtKeyBox (x, y) w m
-    EQ => addAtKeyBox (x, x) w m
-    GT => addAtKeyBox (y, x) (negWeight w) m
+updateHalfBox :
+  Ord k => MultisetWeight c =>
+  (isAdd, allowDiag, antisymOff : Bool) ->
+  k -> k -> c -> Box c (k, k) -> Box c (k, k)
+updateHalfBox isAdd allowDiag antisymOff x y w m =
+  if isAdd && isZero w
+    then m
+    else case compare x y of
+           LT => if isAdd then addAtKeyBox (x, y) w m else setBox (x, y) w m
+           EQ => if allowDiag then (if isAdd then addAtKeyBox (x, x) w m else setBox (x, x) w m) else m
+           GT => if isAdd
+                   then addAtKeyBox (y, x) (if antisymOff then negWeight w else w) m
+                   else setBox      (y, x) (if antisymOff then negWeight w else w) m
 
 ||| Extracts the diagonal `(x, x)` weights of any square `Maxel` into `Box c k`.
 public export
@@ -761,27 +718,27 @@ lookupMaxel :
   {auto ordA : Ord a} -> {auto ordB : Ord b} -> {auto mw : MultisetWeight c} ->
   {form : MaxelForm a b} -> a -> b -> Maxel c a b form -> c
 lookupMaxel {form = GeneralForm}     x y (MkMaxel m) = lookupBox (x, y) m
-lookupMaxel {form = SymForm}         x y (MkMaxel m) = lookupSymBox @{ordA} @{mw} x y m
-lookupMaxel {form = AntisymForm}     x y (MkMaxel m) = lookupAntisymBox @{ordA} @{mw} x y m
-lookupMaxel {form = DiagAntisymForm} x y (MkMaxel m) = lookupDiagAntisymBox @{ordA} @{mw} x y m
+lookupMaxel {form = SymForm}         x y (MkMaxel m) = lookupHalfBox @{ordA} @{mw} True  False x y m
+lookupMaxel {form = AntisymForm}     x y (MkMaxel m) = lookupHalfBox @{ordA} @{mw} False True  x y m
+lookupMaxel {form = DiagAntisymForm} x y (MkMaxel m) = lookupHalfBox @{ordA} @{mw} True  True  x y m
 
 public export
 setMaxelEdge :
   {auto ordA : Ord a} -> {auto ordB : Ord b} -> {auto mw : MultisetWeight c} ->
   {form : MaxelForm a b} -> a -> b -> c -> Maxel c a b form -> Maxel c a b form
 setMaxelEdge {form = GeneralForm}     x y w (MkMaxel m) = MkMaxel (setBox (x, y) w m)
-setMaxelEdge {form = SymForm}         x y w (MkMaxel m) = MkMaxel (setSymHalfBox @{ordA} @{mw} x y w m)
-setMaxelEdge {form = AntisymForm}     x y w (MkMaxel m) = MkMaxel (setAntisymHalfBox @{ordA} @{mw} x y w m)
-setMaxelEdge {form = DiagAntisymForm} x y w (MkMaxel m) = MkMaxel (setDiagAntisymHalfBox @{ordA} @{mw} x y w m)
+setMaxelEdge {form = SymForm}         x y w (MkMaxel m) = MkMaxel (updateHalfBox @{ordA} @{mw} False True  False x y w m)
+setMaxelEdge {form = AntisymForm}     x y w (MkMaxel m) = MkMaxel (updateHalfBox @{ordA} @{mw} False False True  x y w m)
+setMaxelEdge {form = DiagAntisymForm} x y w (MkMaxel m) = MkMaxel (updateHalfBox @{ordA} @{mw} False True  True  x y w m)
 
 public export
 addAtMaxelEdge :
   {auto ordA : Ord a} -> {auto ordB : Ord b} -> {auto mw : MultisetWeight c} ->
   {form : MaxelForm a b} -> a -> b -> c -> Maxel c a b form -> Maxel c a b form
 addAtMaxelEdge {form = GeneralForm}     x y w (MkMaxel m) = MkMaxel (addAtKeyBox (x, y) w m)
-addAtMaxelEdge {form = SymForm}         x y w (MkMaxel m) = MkMaxel (addSymHalfBox @{ordA} @{mw} x y w m)
-addAtMaxelEdge {form = AntisymForm}     x y w (MkMaxel m) = MkMaxel (addAntisymHalfBox @{ordA} @{mw} x y w m)
-addAtMaxelEdge {form = DiagAntisymForm} x y w (MkMaxel m) = MkMaxel (addDiagAntisymHalfBox @{ordA} @{mw} x y w m)
+addAtMaxelEdge {form = SymForm}         x y w (MkMaxel m) = MkMaxel (updateHalfBox @{ordA} @{mw} True True  False x y w m)
+addAtMaxelEdge {form = AntisymForm}     x y w (MkMaxel m) = MkMaxel (updateHalfBox @{ordA} @{mw} True False True  x y w m)
+addAtMaxelEdge {form = DiagAntisymForm} x y w (MkMaxel m) = MkMaxel (updateHalfBox @{ordA} @{mw} True True  True  x y w m)
 
 public export
 singletonMaxelEdge :
@@ -953,16 +910,16 @@ hadamardMaxel :
 hadamardMaxel = hadamardMaxelByTag @{ordA} @{ordB} @{mw} maxelFormTag maxelFormTag
 
 public export
-convolveMaxelStencil :
+shiftConvolveMaxel :
   (Ord k, MultisetWeight c) =>
   {form : MaxelForm k k} ->
   (k -> k -> k) ->
   Maxel c k k form ->
   Box c k ->
   Maxel c k k form
-convolveMaxelStencil _ (MkMaxel BoxLeaf) _ = MkMaxel BoxLeaf
-convolveMaxelStencil _ _ BoxLeaf           = MkMaxel BoxLeaf
-convolveMaxelStencil {form} shiftAdd (MkMaxel m) stencil =
+shiftConvolveMaxel _ (MkMaxel BoxLeaf) _ = MkMaxel BoxLeaf
+shiftConvolveMaxel _ _ BoxLeaf           = MkMaxel BoxLeaf
+shiftConvolveMaxel {form} shiftAdd (MkMaxel m) shiftBox =
   MkMaxel $ foldBox (\(x, y), w1, outer =>
                        foldBox (\s, w2, inner =>
                                   let x'   = shiftAdd x s
@@ -970,25 +927,25 @@ convolveMaxelStencil {form} shiftAdd (MkMaxel m) stencil =
                                       prod = mulWeight w1 w2
                                   in case form of
                                        GeneralForm     => if isZero prod then inner else addAtKeyBox (x', y') prod inner
-                                       SymForm         => addSymHalfBox x' y' prod inner
-                                       AntisymForm     => addAntisymHalfBox x' y' prod inner
-                                       DiagAntisymForm => addDiagAntisymHalfBox x' y' prod inner)
-                               outer stencil)
+                                       SymForm         => updateHalfBox True True  False x' y' prod inner
+                                       AntisymForm     => updateHalfBox True False True  x' y' prod inner
+                                       DiagAntisymForm => updateHalfBox True True  True  x' y' prod inner)
+                               outer shiftBox)
                     BoxLeaf m
 
-||| Sparse 4-direction Laurent stencil `[+dx, -dx, +dy, -dy]` over any `GroupCoord k`.
+||| Sparse 2-axis balanced unit-shift multiset `[+dx, -dx, +dy, -dy]` given a coordinate negator.
 public export
-laurentStencil4 : (GroupCoord k, MultisetWeight c) => (dx, dy : k) -> Box c k
-laurentStencil4 dx dy =
-  addAtKeyBox (inverse dy) oneWeight $
-  addAtKeyBox dy           oneWeight $
-  addAtKeyBox (inverse dx) oneWeight $
-  singletonBox dx          oneWeight
+unitAxes2DWith : (Ord k, MultisetWeight c) => (negShift : k -> k) -> (dx, dy : k) -> Box c k
+unitAxes2DWith negShift dx dy =
+  addAtKeyBox (negShift dy) oneWeight $
+  addAtKeyBox dy            oneWeight $
+  addAtKeyBox (negShift dx) oneWeight $
+  singletonBox dx           oneWeight
 
-||| Sparse Laurent stencil convolution `m * stencil` over any `MonoidCoord k`.
+||| Sparse 2-axis balanced unit-shift multiset `[+dx, -dx, +dy, -dy]` over any `GroupCoord k`.
 public export
-convolveStencil : (MonoidCoord k, MultisetWeight c) => Box c k -> Box c k -> Box c k
-convolveStencil = mulBoxWith
+unitAxes2D : (GroupCoord k, MultisetWeight c) => (dx, dy : k) -> Box c k
+unitAxes2D = unitAxes2DWith inverse
 
 ||| Retains strictly entries whose magnitude meets `minCut` (for sparse series pruning).
 public export
@@ -1032,25 +989,25 @@ laurentGreenLoop : Ord k =>
                    Box BoxInt k
 laurentGreenLoop _ Z _ _ _ _ acc = acc
 laurentGreenLoop _ _ _ _ _ BoxLeaf acc = acc
-laurentGreenLoop shiftAdd (S rem) den minCut stencil cur acc =
-  let spread = pairBoxWith shiftAdd cur stencil
+laurentGreenLoop shiftAdd (S rem) den minCut shiftBox cur acc =
+  let spread = pairBoxWith shiftAdd cur shiftBox
       nxt    = scaleDivPruneBox den minCut spread
       acc1   = unionBox acc nxt
-  in laurentGreenLoop shiftAdd rem den minCut stencil nxt acc1
+  in laurentGreenLoop shiftAdd rem den minCut shiftBox nxt acc1
 
-||| Computes the truncated sparse discrete Poisson series
-||| `sum_{k=0}^{hops} trunc(((stencil / den)^k) * src)` over any associative shift `shiftAdd`,
+||| Computes the truncated sparse geometric shift series
+||| `sum_{k=0}^{hops} trunc(((shiftBox / den)^k) * src)` over any associative shift `shiftAdd`,
 ||| pruning intermediates below `minCut` to keep AVL trees lean.
 public export
 laurentGreenSeries : Ord k =>
                      (k -> k -> k) ->
                      (hops : Nat) ->
                      (den, minCut : Integer) ->
-                     (stencil, src : Box BoxInt k) ->
+                     (shiftBox, src : Box BoxInt k) ->
                      Box BoxInt k
-laurentGreenSeries shiftAdd hops den minCut stencil src =
+laurentGreenSeries shiftAdd hops den minCut shiftBox src =
   let cur0 = pruneMinBox minCut src
-  in laurentGreenLoop shiftAdd hops den minCut stencil cur0 cur0
+  in laurentGreenLoop shiftAdd hops den minCut shiftBox cur0 cur0
 
 ------------------------------------------------------------------------
 -- 7. STANDARD ALGEBRAIC INSTANCES ON `Box c k`

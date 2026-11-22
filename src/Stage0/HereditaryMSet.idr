@@ -237,13 +237,7 @@ outerHMSet (MkHMSet b1) (MkHMSet b2) =
         let sa  = MkHMSet (setBox a one BoxLeaf)
             sab = MkHMSet (setBox b one (setBox a one BoxLeaf))
         in MkHMSet (setBox sab one (setBox sa one BoxLeaf))
-  in MkHMSet $ foldBox (\k1, w1, accOuter =>
-                         foldBox (\k2, w2, accInner =>
-                                   addAtKeyBox (pairKey k1 k2) (mulWeight w1 w2) accInner)
-                                 accOuter
-                                 b2)
-                       BoxLeaf
-                       b1
+  in MkHMSet (pairBoxWith pairKey b1 b2)
 
 ------------------------------------------------------------------------
 -- 4. CANONICAL SYMBOLIC ALGEBRA INSTANCES ON `HereditaryMSet c`
