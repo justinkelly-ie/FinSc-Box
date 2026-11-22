@@ -6,21 +6,18 @@ brief   = "FinSc-Box: Minimal Hereditary Multiset & Space-Time-Multiplicity Engi
 depends = base >= 0.8.0
         , linear
 
-modules = Stage0.BoxInt
-        , Stage0.Interfaces
-        , Stage0.Box
-        , Stage0.HereditaryMSet
-        , Stage0.Multiset
-        , Stage0.Multiplicity
-        , Stage1.Basis.Space
-        , Stage1.Basis.SpaceStream
-        , Stage1.Basis.Time
-        , Stage1.ConvolutionAdmissibility
-        , Stage1.Views
-        , Stage1.Lenses
-        , Stage1.ProjectiveRotation
-        , Stage1.MultisetCodec
-        , Stage1.BlackRedZoom
+modules = FinScBox.BoxInt
+        , FinScBox.Interfaces
+        , FinScBox.Box
+        , FinScBox.HereditaryMSet
+        , FinScBox.Multiset
+        , FinScBox.SpaceTime
+        , FinScBox.SpaceStream
+        , FinScBox.ProjectiveRotation
+        , FinScBox.MultisetCodec
+        , FinScBox.BlackRedZoom
+        , FinScBox.Views
+        , FinScBox.Lenses
         , FinScBox
 
 sourcedir = "src"

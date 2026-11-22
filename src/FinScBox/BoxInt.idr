@@ -1,4 +1,4 @@
-module Stage0.BoxInt
+module FinScBox.BoxInt
 
 import Data.Nat
 import Data.Linear

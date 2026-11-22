@@ -1,10 +1,10 @@
-module Stage0.Interfaces
+module FinScBox.Interfaces
 
 import public Data.Linear
 import Data.Fin
 import Data.Fin.Properties
 import Data.Nat
-import Stage0.BoxInt
+import FinScBox.BoxInt
 
 %default total
 
@@ -40,7 +40,7 @@ interface DiscreteCoord k => MonoidCoord k where
 public export
 interface MonoidCoord k => GroupCoord k where
   inverse  : k -> k
-  0 invLaw : (x : k) -> combine x (inverse x) = Stage0.Interfaces.origin
+  0 invLaw : (x : k) -> combine x (inverse x) = FinScBox.Interfaces.origin
 
 ||| Level 5: Directed relational / adjacency edge coordinate pair `(a, b)` supporting
 ||| matrix/relational contraction (`MulStatic`, `OuterM`, `ContractR`, `ContractL`).

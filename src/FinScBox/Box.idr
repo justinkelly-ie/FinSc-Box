@@ -1,8 +1,8 @@
-module Stage0.Box
+module FinScBox.Box
 
 import Data.List
-import public Stage0.BoxInt
-import public Stage0.Interfaces
+import public FinScBox.BoxInt
+import public FinScBox.Interfaces
 
 %default total
 

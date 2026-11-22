@@ -1,8 +1,8 @@
-module Stage0.HereditaryMSet
+module FinScBox.HereditaryMSet
 
 import Data.List
 import Data.Nat
-import public Stage0.Box
+import public FinScBox.Box
 
 %default total
 
@@ -507,7 +507,7 @@ elementaryPolarityCount =
 
 ||| Compile-time audit verifying `elementaryPolarityCount` reduces definitionally to `2`.
 public export
-0 prfElementaryPolarityTwo : Stage0.HereditaryMSet.elementaryPolarityCount = 2
+0 prfElementaryPolarityTwo : FinScBox.HereditaryMSet.elementaryPolarityCount = 2
 prfElementaryPolarityTwo = Refl
 
 ||| Two boundary endpoints (`low` entry `Skip` and `high` exit `Skip`)

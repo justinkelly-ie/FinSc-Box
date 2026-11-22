@@ -1,19 +1,16 @@
 module FinScBox
 
-import public Stage0.BoxInt
-import public Stage0.Interfaces
-import public Stage0.Box
-import public Stage0.HereditaryMSet
-import public Stage0.Multiset
-import public Stage0.Multiplicity
-import public Stage1.Basis.Space
-import public Stage1.Basis.SpaceStream
-import public Stage1.Basis.Time
-import public Stage1.ConvolutionAdmissibility
-import public Stage1.Views
-import public Stage1.Lenses
-import public Stage1.ProjectiveRotation
-import public Stage1.MultisetCodec
-import public Stage1.BlackRedZoom
+import public FinScBox.BoxInt
+import public FinScBox.Interfaces
+import public FinScBox.Box
+import public FinScBox.HereditaryMSet
+import public FinScBox.Multiset
+import public FinScBox.SpaceTime
+import public FinScBox.SpaceStream
+import public FinScBox.ProjectiveRotation
+import public FinScBox.MultisetCodec
+import public FinScBox.BlackRedZoom
+import public FinScBox.Views
+import public FinScBox.Lenses
 
 %default total

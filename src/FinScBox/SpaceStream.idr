@@ -1,14 +1,12 @@
-module Stage1.Basis.SpaceStream
+module FinScBox.SpaceStream
 
 import Data.Nat
-import Stage0.BoxInt
-import Stage0.Interfaces
-import Stage0.Box
-import Stage0.Multiset
-import Stage0.Multiplicity
-import Stage0.HereditaryMSet
-import Stage1.Basis.Space
-import Stage1.Basis.Time
+import FinScBox.BoxInt
+import FinScBox.Interfaces
+import FinScBox.Box
+import FinScBox.Multiset
+import FinScBox.HereditaryMSet
+import FinScBox.SpaceTime
 
 %default total
 

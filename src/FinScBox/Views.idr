@@ -1,6 +1,6 @@
-module Stage1.Views
+module FinScBox.Views
 
-import public Stage0.HereditaryMSet
+import public FinScBox.HereditaryMSet
 
 %default total
 

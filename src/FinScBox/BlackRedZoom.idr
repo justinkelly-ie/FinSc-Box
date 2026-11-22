@@ -1,11 +1,11 @@
-module Stage1.BlackRedZoom
+module FinScBox.BlackRedZoom
 
 import Data.Nat
-import public Stage0.BoxInt
-import public Stage0.Interfaces
-import public Stage0.Box
-import public Stage0.HereditaryMSet
-import public Stage1.Views
+import public FinScBox.BoxInt
+import public FinScBox.Interfaces
+import public FinScBox.Box
+import public FinScBox.HereditaryMSet
+import public FinScBox.Views
 
 %default total
 
@@ -94,30 +94,30 @@ sampleUnitPairMSet =
 
 public export
 0 prfBlackRedAnnihilates :
-  addHMSet (Stage1.BlackRedZoom.blackShift 1) (Stage1.BlackRedZoom.redShift 1) =
-  Stage0.HereditaryMSet.emptyPureMSet
+  addHMSet (FinScBox.BlackRedZoom.blackShift 1) (FinScBox.BlackRedZoom.redShift 1) =
+  FinScBox.HereditaryMSet.emptyPureMSet
 prfBlackRedAnnihilates = Refl
 
 public export
 0 prfZoomTimeRoundTrip :
-  (zoomTime (redShift 1) (zoomTime (blackShift 1) Stage1.BlackRedZoom.sampleUnitPairMSet)
-   == Stage1.BlackRedZoom.sampleUnitPairMSet) = True
+  (zoomTime (redShift 1) (zoomTime (blackShift 1) FinScBox.BlackRedZoom.sampleUnitPairMSet)
+   == FinScBox.BlackRedZoom.sampleUnitPairMSet) = True
 prfZoomTimeRoundTrip = Refl
 
 public export
 0 prfZoomTimeAnnihilatedShiftIsId :
-  (zoomTime (addHMSet (blackShift 1) (redShift 1)) Stage1.BlackRedZoom.sampleUnitPairMSet
-   == Stage1.BlackRedZoom.sampleUnitPairMSet) = True
+  (zoomTime (addHMSet (blackShift 1) (redShift 1)) FinScBox.BlackRedZoom.sampleUnitPairMSet
+   == FinScBox.BlackRedZoom.sampleUnitPairMSet) = True
 prfZoomTimeAnnihilatedShiftIsId = Refl
 
 public export
 0 prfZoomSpaceRoundTrip :
-  (zoomSpace (redShift 1) (zoomSpace (blackShift 1) Stage1.BlackRedZoom.sampleUnitPairMSet)
-   == Stage1.BlackRedZoom.sampleUnitPairMSet) = True
+  (zoomSpace (redShift 1) (zoomSpace (blackShift 1) FinScBox.BlackRedZoom.sampleUnitPairMSet)
+   == FinScBox.BlackRedZoom.sampleUnitPairMSet) = True
 prfZoomSpaceRoundTrip = Refl
 
 public export
 0 prfZoomSpaceAnnihilatedShiftIsId :
-  (zoomSpace (addHMSet (blackShift 1) (redShift 1)) Stage1.BlackRedZoom.sampleUnitPairMSet
-   == Stage1.BlackRedZoom.sampleUnitPairMSet) = True
+  (zoomSpace (addHMSet (blackShift 1) (redShift 1)) FinScBox.BlackRedZoom.sampleUnitPairMSet
+   == FinScBox.BlackRedZoom.sampleUnitPairMSet) = True
 prfZoomSpaceAnnihilatedShiftIsId = Refl

@@ -1,13 +1,13 @@
-module Stage1.Lenses
+module FinScBox.Lenses
 
 import Data.Vect
-import public Stage0.BoxInt
-import public Stage0.Box
-import public Stage0.Multiset
-import public Stage0.HereditaryMSet
-import public Stage1.ProjectiveRotation
-import public Stage1.BlackRedZoom
-import public Stage1.Basis.Time
+import public FinScBox.BoxInt
+import public FinScBox.Box
+import public FinScBox.Multiset
+import public FinScBox.HereditaryMSet
+import public FinScBox.ProjectiveRotation
+import public FinScBox.BlackRedZoom
+import public FinScBox.SpaceTime
 
 %default total
 
@@ -115,15 +115,15 @@ zoomedExternalLens = MkExternalLens
 
 public export
 0 prfExternalLensZeroShiftIsId :
-  Stage1.Lenses.applyExternalLens (Stage1.Lenses.directPureLens (\m => m)) Stage1.BlackRedZoom.sampleUnitPairMSet
-  = Stage1.BlackRedZoom.sampleUnitPairMSet
+  FinScBox.Lenses.applyExternalLens (FinScBox.Lenses.directPureLens (\m => m)) FinScBox.BlackRedZoom.sampleUnitPairMSet
+  = FinScBox.BlackRedZoom.sampleUnitPairMSet
 prfExternalLensZeroShiftIsId = Refl
 
 public export
 0 prfExternalLensSpaceZoomMatches :
-  Stage1.Lenses.applyExternalLens
-    (MkExternalLens (\m => m) (blackShift 1) Stage1.BlackRedZoom.zeroShift (RetroTime 1) (\m => m))
-    Stage1.BlackRedZoom.sampleUnitPairMSet
-  = zoomSpace (blackShift 1) Stage1.BlackRedZoom.sampleUnitPairMSet
+  FinScBox.Lenses.applyExternalLens
+    (MkExternalLens (\m => m) (blackShift 1) FinScBox.BlackRedZoom.zeroShift (RetroTime 1) (\m => m))
+    FinScBox.BlackRedZoom.sampleUnitPairMSet
+  = zoomSpace (blackShift 1) FinScBox.BlackRedZoom.sampleUnitPairMSet
 prfExternalLensSpaceZoomMatches = Refl
 

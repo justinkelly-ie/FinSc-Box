@@ -1,10 +1,10 @@
-module Stage1.ProjectiveRotation
+module FinScBox.ProjectiveRotation
 
 import Data.Vect
-import Stage0.BoxInt
-import Stage0.Interfaces
-import Stage0.Box
-import Stage0.Multiset
+import FinScBox.BoxInt
+import FinScBox.Interfaces
+import FinScBox.Box
+import FinScBox.Multiset
 
 %default total
 

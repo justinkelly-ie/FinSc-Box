@@ -1,11 +1,11 @@
-module Stage0.Multiset
+module FinScBox.Multiset
 
 import Data.Fin
 import Data.Nat
 import Data.List
-import public Stage0.Interfaces
-import public Stage0.BoxInt
-import public Stage0.Box
+import public FinScBox.Interfaces
+import public FinScBox.BoxInt
+import public FinScBox.Box
 
 %default total
 
@@ -14,7 +14,7 @@ import public Stage0.Box
 ------------------------------------------------------------------------
 
 ||| Canonical multiplicity-parameterised coordinate multiset (`MSet m k = Box m k`)
-||| backed by height-cached AVL trees in `Stage0.Box`.
+||| backed by height-cached AVL trees in `FinScBox.Box`.
 public export
 MSet : (m : Type) -> (k : Type) -> Type
 MSet m k = Box m k
@@ -188,7 +188,7 @@ boundedDiffMSet : DiscreteCoord k => MSetBox k -> MSetBox k -> MSetBox k
 boundedDiffMSet m1 m2 =
   foldBoxTreeL (\acc, (x, w1) =>
     let w2 = lookupMSet x m2
-        remW = Stage0.BoxInt.subBox w1 w2
+        remW = FinScBox.BoxInt.subBox w1 w2
     in if remW > intToBoxInt 0 then setBox x remW acc else acc) BoxLeaf m1
 
 ||| Multiset Symmetric Difference: (M1 Δ M2)(x) = |M1(x) - M2(x)|.

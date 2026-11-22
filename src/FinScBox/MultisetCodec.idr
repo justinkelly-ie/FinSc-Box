@@ -1,12 +1,12 @@
-module Stage1.MultisetCodec
+module FinScBox.MultisetCodec
 
 import Data.List
 import Data.Nat
 import Decidable.Equality
-import Stage0.BoxInt
-import Stage0.Interfaces
-import Stage0.Box
-import Stage0.HereditaryMSet
+import FinScBox.BoxInt
+import FinScBox.Interfaces
+import FinScBox.Box
+import FinScBox.HereditaryMSet
 
 %default total
 
@@ -50,7 +50,7 @@ renderInteger n =
       else pack (posIntToCharsFuel 128 n [])
 
 --------------------------------------------------------------------------------
--- 2. CANONICAL MULTISET RENDERER (EXACT PARITY WITH `Stage0.HereditaryMSet.show`)
+-- 2. CANONICAL MULTISET RENDERER (EXACT PARITY WITH `FinScBox.HereditaryMSet.show`)
 --------------------------------------------------------------------------------
 
 mutual
@@ -71,7 +71,7 @@ mutual
   renderPureFuel (S rem) (MkHMSet b) =
     "{" ++ renderPureEntries rem (toAscListBox b) ++ "}"
 
-||| Canonical total renderer producing identical text to `Stage0.HereditaryMSet.show`.
+||| Canonical total renderer producing identical text to `FinScBox.HereditaryMSet.show`.
 public export
 renderPureMultiset : PureMultiset -> String
 renderPureMultiset m = renderPureFuel (hmDepth m) m
@@ -214,31 +214,31 @@ decodeCanonicalMultiset s =
 
 public export
 0 prfRenderEmpty :
-  Stage1.MultisetCodec.renderPureMultiset Stage0.HereditaryMSet.emptyPureMSet = "[]"
+  FinScBox.MultisetCodec.renderPureMultiset FinScBox.HereditaryMSet.emptyPureMSet = "[]"
 prfRenderEmpty = Refl
 
 public export
 0 prfCodecRoundTripVacuum :
-  (case Stage1.MultisetCodec.parsePureMultiset
-          (Stage1.MultisetCodec.renderPureMultiset Stage0.HereditaryMSet.emptyPureMSet) of
-     Just m  => m == Stage0.HereditaryMSet.emptyPureMSet
+  (case FinScBox.MultisetCodec.parsePureMultiset
+          (FinScBox.MultisetCodec.renderPureMultiset FinScBox.HereditaryMSet.emptyPureMSet) of
+     Just m  => m == FinScBox.HereditaryMSet.emptyPureMSet
      Nothing => False) = True
 prfCodecRoundTripVacuum = Refl
 
 public export
 0 prfCodecRoundTripBlack1 :
-  (let b1 = Stage0.HereditaryMSet.scalarKeyHMSet 1
-   in case Stage1.MultisetCodec.parsePureMultiset
-             (Stage1.MultisetCodec.renderPureMultiset b1) of
+  (let b1 = FinScBox.HereditaryMSet.scalarKeyHMSet 1
+   in case FinScBox.MultisetCodec.parsePureMultiset
+             (FinScBox.MultisetCodec.renderPureMultiset b1) of
         Just m  => m == b1
         Nothing => False) = True
 prfCodecRoundTripBlack1 = Refl
 
 public export
 0 prfCodecRoundTripNeg1 :
-  (let r1 = Stage0.HereditaryMSet.scalarKeyHMSet (-1)
-   in case Stage1.MultisetCodec.parsePureMultiset
-             (Stage1.MultisetCodec.renderPureMultiset r1) of
+  (let r1 = FinScBox.HereditaryMSet.scalarKeyHMSet (-1)
+   in case FinScBox.MultisetCodec.parsePureMultiset
+             (FinScBox.MultisetCodec.renderPureMultiset r1) of
         Just m  => m == r1
         Nothing => False) = True
 prfCodecRoundTripNeg1 = Refl
