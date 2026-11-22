@@ -4,7 +4,6 @@ import Data.Vect
 import FinScBox.BoxInt
 import FinScBox.Interfaces
 import FinScBox.Box
-import FinScBox.Multiset
 
 %default total
 
@@ -37,12 +36,6 @@ public export
 idProportion : ProjectiveProportion
 idProportion = MkProjectiveProportion (intToBoxInt 1) (intToBoxInt 0) (intToBoxInt 0) (intToBoxInt 0)
 
-||| Euclidean quadrance of a 3D vector: Q(v) = t^2 + r^2 + s^2.
-public export
-quadranceEuc3 : Vect 3 BoxInt -> BoxInt
-quadranceEuc3 [t, r, s] = (t * t) + (r * r) + (s * s)
-
-||| Exact cross product of two 3D vectors: v1 x v2.
 public export
 crossProduct3 : Vect 3 BoxInt -> Vect 3 BoxInt -> Vect 3 BoxInt
 crossProduct3 [t1, r1, s1] [t2, r2, s2] =
@@ -141,15 +134,6 @@ applyGroverScaled3 [v1, v2, v3] =
      , dotProduct3 r3 [v1, v2, v3]
      ]
 
-||| Equilateral triangle rational spread s = 3/4 (numerator = 3, denominator = 4).
-public export
-equilateralSpreadNum : Integer
-equilateralSpreadNum = 3
-
-public export
-equilateralSpreadDen : Integer
-equilateralSpreadDen = 4
-
 ||| Compile-time QTT 0 verification of Wildberger's Triple Spread Formula for (3/4, 3/4, 3/4):
 ||| (s1 + s2 + s3)^2 = 2(s1^2 + s2^2 + s3^2) + 4 s1 s2 s3
 ||| Over common denominator 64:
@@ -164,30 +148,6 @@ public export
        rhs2 = 4 * (sNum * sNum * sNum) * sDen         -- 4 * 27 * 4  = 432
    in lhs == rhs1 + rhs2) = True
 prfTripleSpreadEquilateral = Refl
-
-------------------------------------------------------------------------
--- 4. PUSHFORWARD ROTATION OVER 3D MULTISETS
-------------------------------------------------------------------------
-
-public export
-{n : Nat} -> Ord a => DiscreteCoord (Vect n a) where
-
-||| Active physical pushforward of a 3D coordinate multiset along a projective rotation proportion.
-||| Computes M' = R_*(M) = \sum c_i [R(v_i)]. Colliding points sum their multiplicities.
-public export
-pushforwardRotation3 : ProjectiveProportion -> MSetBox (Vect 3 BoxInt) -> MSetBox (Vect 3 BoxInt)
-pushforwardRotation3 p = pushforwardMSet (rotateVectorScaled p)
-
-------------------------------------------------------------------------
--- 5. PASSIVE ROTATED MULTISET OBSERVER VIEW
-------------------------------------------------------------------------
-
-||| Zero-allocation coordinate lookup through the rotated frame:
-||| Queries the base multiset at the inverse rotated coordinate.
-public export
-lookupRotatedMSet : ProjectiveProportion -> Vect 3 BoxInt -> MSetBox (Vect 3 BoxInt) -> BoxInt
-lookupRotatedMSet p v m =
-  lookupBox (rotateVectorScaled (inverseProportion p) v) m
 
 ------------------------------------------------------------------------
 -- 6. WILDBERGER PARAMETRIC PYTHAGOREAN ROTATION `(m^2 - 1, 2m, m^2 + 1)`

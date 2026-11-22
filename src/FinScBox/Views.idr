@@ -61,92 +61,13 @@ public export
 interactChannels : MultisetWeight c => DualChannelView c -> HereditaryMSet c
 interactChannels (MkDualChannels posM negM) = subHMSet posM negM
 
-------------------------------------------------------------------------
--- 3. LAURENT POLYNUMBER VIEW (`LaurentView`: coeff * alpha^(+/- k))
-------------------------------------------------------------------------
-
-||| Classifies a key in `HereditaryMSet c` as either:
-||| - `ExponentKey k`   : A canonical scalar exponent `k : Integer` (for `alpha^k`)
-||| - `NestedTermKey m` : A deeper nested multiset structure
-public export
-data LaurentKeyKind : (c : Type) -> Type where
-  ExponentKey   : (expK : Integer) -> LaurentKeyKind c
-  NestedTermKey : (subM : HereditaryMSet c) -> LaurentKeyKind c
-
-||| Helper extracting a signed `Integer` exponent from a scalar key `HereditaryMSet c`
-||| via a carrier-to-`Integer` projection (`toInt : c -> Integer`).
-public export
-classifyLaurentKey : MultisetWeight c => (toInt : c -> Integer) -> HereditaryMSet c -> LaurentKeyKind c
-classifyLaurentKey _ (MkHMSet BoxLeaf) = ExponentKey 0
-classifyLaurentKey toInt m@(MkHMSet (BoxNode _ BoxLeaf (MkHMSet BoxLeaf) w BoxLeaf)) =
-  ExponentKey (toInt w)
-classifyLaurentKey _ m = NestedTermKey m
-
-||| View exposing a `HereditaryMSet c` as a sorted sequence of Laurent polynumber
-||| terms (`coeff * alpha^expK`) from lowest negative exponent to highest positive exponent.
-public export
-data LaurentView : (c : Type) -> Type where
-  ||| Zero Laurent polynumber (`0`)
-  LaurentZero   : LaurentView c
-  ||| Head Laurent monomial `coeff * alpha^expK` followed by the remaining polynumber `rest`
-  LaurentTerm   : (expK : Integer) -> (coeff : c) -> (rest : HereditaryMSet c) -> LaurentView c
-  ||| Non-scalar nested sub-multiset term `coeff * subM` followed by `rest`
-  LaurentNested : (subM : HereditaryMSet c) -> (coeff : c) -> (rest : HereditaryMSet c) -> LaurentView c
-
-public export
-laurentViewLoop : MultisetWeight c => Nat -> (toInt : c -> Integer) -> HereditaryMSet c -> LaurentView c
-laurentViewLoop Z _ _ = LaurentZero
-laurentViewLoop (S rem) _ (MkHMSet BoxLeaf) = LaurentZero
-laurentViewLoop (S rem) toInt (MkHMSet tree@(BoxNode _ _ _ _ _)) =
-  case extractMinBox tree of
-    Nothing => LaurentZero
-    Just (key, coeff, tailTree) =>
-      if isZero coeff
-        then laurentViewLoop rem toInt (MkHMSet tailTree)
-        else case classifyLaurentKey toInt key of
-               ExponentKey k   => LaurentTerm k coeff (MkHMSet tailTree)
-               NestedTermKey m => LaurentNested m coeff (MkHMSet tailTree)
-
-||| Total covering function projecting any `HereditaryMSet c` into `LaurentView c`
-||| in O(log N) per step by peeling the minimum AVL key.
-public export
-viewAsLaurent : MultisetWeight c => (toInt : c -> Integer) -> HereditaryMSet c -> LaurentView c
-viewAsLaurent toInt m@(MkHMSet tree) = laurentViewLoop (S (boxNodeCount tree)) toInt m
-
-
-------------------------------------------------------------------------
--- 4. CONSTRUCTIVIST DUAL-CHANNEL DISJOINTNESS RECOGNIZER (`recognition-rule.md`)
-------------------------------------------------------------------------
 
 public export
 isHMBoxLeaf : HereditaryMSet c -> Bool
 isHMBoxLeaf (MkHMSet BoxLeaf) = True
 isHMBoxLeaf _                 = False
 
-||| Boolean check that `posChannel` (`M_+`) and `negChannel` (`M_-`) share zero active keys.
+||| Boolean check that  () and  () share zero active keys.
 public export
 disjointDualSupports : MultisetWeight c => DualChannelView c -> Bool
 disjointDualSupports (MkDualChannels p n) = isHMBoxLeaf (hadamardHMSet p n)
-
-||| Proof predicate witnessing disjoint supports between `posChannel` and `negChannel`.
-public export
-DisjointSupports : MultisetWeight c => DualChannelView c -> Type
-DisjointSupports v = (disjointDualSupports v = True)
-
-||| Total `Dec` recognizer verifying that a `DualChannelView c` has strictly disjoint supports.
-public export
-recognizeDisjointChannels : MultisetWeight c => (v : DualChannelView c) -> Dec (DisjointSupports v)
-recognizeDisjointChannels v = decideBoolTrue (disjointDualSupports v)
-
-||| Erased-proof `Subset` storing a verified disjoint `DualChannelView c`.
-public export
-DisjointDualChannels : (c : Type) -> MultisetWeight c => Type
-DisjointDualChannels c = Subset (DualChannelView c) DisjointSupports
-
-||| Smart constructor returning `Just (Subset v prf)` when both channels have disjoint supports.
-public export
-toDisjointDualChannels : MultisetWeight c => (v : DualChannelView c) -> Maybe (DisjointDualChannels c)
-toDisjointDualChannels v =
-  case recognizeDisjointChannels v of
-    Yes prf => Just (Element v prf)
-    No _    => Nothing

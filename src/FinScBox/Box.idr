@@ -1168,3 +1168,7 @@ splitBoxChannels box =
           (BoxLeaf, BoxLeaf)
           box
 
+||| Multiset symmetric difference: (M1 \Delta M2)(x) = |M1(x) - M2(x)|.
+public export
+symmetricDiffMSet : Ord k => Box BoxInt k -> Box BoxInt k -> Box BoxInt k
+symmetricDiffMSet m1 m2 = mapBoxWeight absBox (subBox m1 m2)
