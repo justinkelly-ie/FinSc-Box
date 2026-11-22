@@ -10,7 +10,6 @@ modules = FinScBox.BoxInt
         , FinScBox.Interfaces
         , FinScBox.Box
         , FinScBox.HereditaryMSet
-        , FinScBox.Time
         , FinScBox.ProjectiveRotation
         , FinScBox.MultisetCodec
         , FinScBox.Views

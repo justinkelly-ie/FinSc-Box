@@ -4,7 +4,6 @@ import public FinScBox.BoxInt
 import public FinScBox.Box
 import public FinScBox.HereditaryMSet
 import public FinScBox.BlackRedZoom
-import public FinScBox.Time
 
 %default total
 
