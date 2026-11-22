@@ -1,6 +1,5 @@
 module FinScBox.HereditaryMSet
 
-import Data.List
 import Data.Nat
 import public Data.Maybe
 import public Decidable.Equality
@@ -518,11 +517,6 @@ public export
 boundaryBracketOverhead : Nat
 boundaryBracketOverhead = elementaryPolarityCount
 
-||| Spatial axis count (`3` dimensions: center + 2 opposing poles).
-public export
-spatialAxisCount : Nat
-spatialAxisCount = S elementaryPolarityCount
-
 ||| Helper to calculate `2^n` for `Nat` buffer depth from `elementaryPolarityCount`.
 public export
 fastNatPower2 : Nat -> Nat
@@ -535,13 +529,6 @@ half : Nat -> Nat
 half Z         = Z
 half (S Z)     = Z
 half (S (S k)) = S (half k)
-
-||| Monomorphic less-than-or-equal test on inductive Peano `Nat` for fuel budgets.
-public export
-fuelLTE : Nat -> Nat -> Bool
-fuelLTE Z _         = True
-fuelLTE (S _) Z     = False
-fuelLTE (S k) (S j) = fuelLTE k j
 
 ||| Monomorphic maximum on inductive Peano `Nat` for fuel envelopes.
 public export
@@ -595,16 +582,6 @@ public export
 Show AnyGohFuel where
   show (MkAnyGohFuel cap gf) = "AnyGohFuel(cap=" ++ show cap ++ ", steps=" ++ show (gohSteps gf) ++ ")"
 
-||| Constructs an existential `GohFuel` envelope from a derived natural capacity.
-public export
-anyGohFuel : (capacity : Nat) -> AnyGohFuel
-anyGohFuel cap = MkAnyGohFuel cap (gohFuelForCapacity cap)
-
-||| Extracts the raw step budget from an existential `GohFuel` envelope.
-public export
-anyGohSteps : AnyGohFuel -> Nat
-anyGohSteps (MkAnyGohFuel _ gf) = gohSteps gf
-
 ||| Single-pass invariants extracted polymorphically from any `HereditaryMSet c`:
 ||| - `nnz`       : Support cardinality `chi_Supp(1)` (non-zero entries)
 ||| - `totalMass` : Absolute multiplicity magnitude sum via `weightMagnitude`
@@ -653,45 +630,6 @@ collectSupportStats (BoxNode _ left (MkHMSet innerBox) w right) =
       mergedMax  = fuelMax lStats.maxDeg (fuelMax childDeg rStats.maxDeg)
   in MkSupportStats mergedNnz mergedMass mergedMax
 
-||| Classifies binary multiset interactions for tight `multiStreamFuelOfHMSet` / `hyperOpFuelOfHMSet` sizing.
-public export
-data InteractionMode : Type where
-  AdditiveMode      : InteractionMode
-  IntersectionMode  : InteractionMode
-  ConvolutionalMode : InteractionMode
-  CaretationMode    : InteractionMode
-
-public export
-combineSupportStats : InteractionMode -> SupportStats -> SupportStats -> SupportStats
-combineSupportStats AdditiveMode a b =
-  MkSupportStats (a.nnz + b.nnz) (a.totalMass + b.totalMass) (fuelMax a.maxDeg b.maxDeg)
-combineSupportStats IntersectionMode a b =
-  MkSupportStats (min a.nnz b.nnz) (min a.totalMass b.totalMass) (min a.maxDeg b.maxDeg)
-combineSupportStats ConvolutionalMode a b =
-  MkSupportStats (a.nnz * b.nnz) (a.totalMass * b.totalMass) (a.maxDeg + b.maxDeg)
-combineSupportStats CaretationMode a b =
-  MkSupportStats (a.nnz * b.nnz) (a.totalMass * b.totalMass) (a.maxDeg * b.maxDeg)
-
-public export
-mkBudgetFromStatsWith : (Nat -> Nat) -> (cap : Nat) -> (treeBound : Nat) -> SupportStats -> (GohFuel cap, Nat)
-mkBudgetFromStatsWith fuelFn cap treeBound stats =
-  let boundedCap = min cap (stats.nnz + S stats.maxDeg)
-      ySteps     = fuelFn boundedCap
-      yieldFuel  = MkGohFuel ySteps
-      stepBudget = ySteps + treeBound + stats.nnz
-  in (yieldFuel, stepBudget)
-
-public export
-mkBudgetFromStats : (cap : Nat) -> (treeBound : Nat) -> SupportStats -> (GohFuel cap, Nat)
-mkBudgetFromStats = mkBudgetFromStatsWith gohFuelNat
-
-||| Polymorphic single-pass `(yieldFuel, stepBudget)` sizer directly over `HereditaryMSet c`
-||| (`BoxInt`, `SignedBit`, or `MultisetBit`), clamped to `cap`.
-public export
-fuelOfHMSet : MultisetWeight c => (cap : Nat) -> HereditaryMSet c -> (GohFuel cap, Nat)
-fuelOfHMSet cap (MkHMSet rootBox) =
-  mkBudgetFromStats cap (fastNatPower2 (boxHeight rootBox)) (collectSupportStats rootBox)
-
 ||| Parameterized uncapped intrinsic self-fuel extractor deriving `cap = nnz + S maxDeg`
 ||| directly from a `HereditaryMSet c` with a caller-supplied fuel scaling law.
 public export
@@ -711,63 +649,14 @@ public export
 selfFuelOfHMSet : MultisetWeight c => HereditaryMSet c -> (AnyGohFuel, Nat)
 selfFuelOfHMSet = selfFuelOfHMSetWith gohFuelNat
 
-||| Strictly O(1) height-only `GohFuel` upper bound derived from cached `boxTreeCapacityBound`
-||| (`2^h - 1`) without traversing the AVL tree.
-public export
-quickFuelOfHMSet : (cap : Nat) -> HereditaryMSet c -> GohFuel cap
-quickFuelOfHMSet cap (MkHMSet rootBox) =
-  MkGohFuel (gohFuelNat (min cap (boxTreeCapacityBound rootBox)))
-
-||| Binary multi-stream fuel combiner directly over `HereditaryMSet c`.
-public export
-multiStreamFuelOfHMSet : MultisetWeight c =>
-                         (cap : Nat) ->
-                         InteractionMode ->
-                         HereditaryMSet c ->
-                         HereditaryMSet c ->
-                         (GohFuel cap, Nat)
-multiStreamFuelOfHMSet cap mode (MkHMSet boxA) (MkHMSet boxB) =
-  let treeBound = fastNatPower2 (boxHeight boxA) + fastNatPower2 (boxHeight boxB)
-      combined  = combineSupportStats mode (collectSupportStats boxA) (collectSupportStats boxB)
-  in mkBudgetFromStats cap treeBound combined
-
-public export
-pairHyperOpFuelHM : MultisetWeight c =>
-                    InteractionMode ->
-                    (extraBound : Nat) ->
-                    (cap : Nat) ->
-                    HereditaryMSet c ->
-                    HereditaryMSet c ->
-                    (GohFuel cap, Nat)
-pairHyperOpFuelHM mode extraBound cap (MkHMSet boxA) (MkHMSet boxB) =
-  let baseBound = fastNatPower2 (boxHeight boxA + boxHeight boxB)
-      pairBound = if extraBound == 0 then baseBound else baseBound + extraBound
-      combined  = combineSupportStats mode (collectSupportStats boxA) (collectSupportStats boxB)
-  in mkBudgetFromStats cap pairBound combined
-
-||| Polymorphic level-aware `hyperOp` fuel sizer directly over `HereditaryMSet c`:
-||| - Level `0` (`+`): `AdditiveMode` with `2^hA + 2^hB` tree bound.
-||| - Level `1` (`*`): `ConvolutionalMode` with exact pairwise bound `2^(hA + hB)`.
-||| - Level `2+` (`^`, ...): `CaretationMode` (`maxDeg = dA * dB`) with `2^(hA + hB) + boundaryBracketOverhead`.
-public export
-hyperOpFuelOfHMSet : MultisetWeight c =>
-                     (level : Nat) ->
-                     (cap : Nat) ->
-                     HereditaryMSet c ->
-                     HereditaryMSet c ->
-                     (GohFuel cap, Nat)
-hyperOpFuelOfHMSet Z cap mA mB = multiStreamFuelOfHMSet cap AdditiveMode mA mB
-hyperOpFuelOfHMSet (S Z) cap mA mB = pairHyperOpFuelHM ConvolutionalMode 0 cap mA mB
-hyperOpFuelOfHMSet (S (S _)) cap mA mB = pairHyperOpFuelHM CaretationMode boundaryBracketOverhead cap mA mB
-
 ------------------------------------------------------------------------
--- 1. TIME HORIZONS OVER THE INTEGER AXIS Z
+-- 7. TIME HORIZONS OVER THE INTEGER AXIS Z
 ------------------------------------------------------------------------
 
 ||| Exhaustive classification of Time & Scale horizons over the integer axis Z:
 public export
 data Time : Type where
-  ||| 1. Fixed compact interval [low, high] known at Stage 1 compile time
+  ||| 1. Fixed compact interval [low, high] known at compile time
   StaticTime     : (low : Integer) -> (high : Integer) -> Time
   ||| 2. Forward causal ray [0, cap] governed by runtime `GohFuel`
   BoundedTime    : (cap : Nat) -> Time
@@ -780,7 +669,6 @@ data Time : Type where
   ||| 6. Two-sided stream with no preset lower or upper bound (productive in both directions)
   BilateralTime  : Time
 
-
 public export
 Eq Time where
   (StaticTime l1 h1)     == (StaticTime l2 h2)     = l1 == l2 && h1 == h2
@@ -791,69 +679,16 @@ Eq Time where
   BilateralTime          == BilateralTime          = True
   _                      == _                      = False
 
-public export
-DecEq Time where
-  decEq (StaticTime l1 h1) (StaticTime l2 h2) =
-    case (decEq l1 l2, decEq h1 h2) of
-      (Yes Refl, Yes Refl) => Yes Refl
-      (No contra, _)       => No (\case Refl => contra Refl)
-      (_, No contra)       => No (\case Refl => contra Refl)
-  decEq (BoundedTime c1) (BoundedTime c2) =
-    case decEq c1 c2 of
-      Yes Refl  => Yes Refl
-      No contra => No (\case Refl => contra Refl)
-  decEq (RetroTime c1) (RetroTime c2) =
-    case decEq c1 c2 of
-      Yes Refl  => Yes Refl
-      No contra => No (\case Refl => contra Refl)
-  decEq (WindowedTime w1) (WindowedTime w2) =
-    case decEq w1 w2 of
-      Yes Refl  => Yes Refl
-      No contra => No (\case Refl => contra Refl)
-  decEq OpenFuture          OpenFuture          = Yes Refl
-  decEq BilateralTime       BilateralTime       = Yes Refl
-  decEq (StaticTime _ _)    (BoundedTime _)     = No (\case Refl impossible)
-  decEq (StaticTime _ _)    (RetroTime _)       = No (\case Refl impossible)
-  decEq (StaticTime _ _)    (WindowedTime _)    = No (\case Refl impossible)
-  decEq (StaticTime _ _)    OpenFuture          = No (\case Refl impossible)
-  decEq (StaticTime _ _)    BilateralTime       = No (\case Refl impossible)
-  decEq (BoundedTime _)     (StaticTime _ _)    = No (\case Refl impossible)
-  decEq (BoundedTime _)     (RetroTime _)       = No (\case Refl impossible)
-  decEq (BoundedTime _)     (WindowedTime _)    = No (\case Refl impossible)
-  decEq (BoundedTime _)     OpenFuture          = No (\case Refl impossible)
-  decEq (BoundedTime _)     BilateralTime       = No (\case Refl impossible)
-  decEq (RetroTime _)       (StaticTime _ _)    = No (\case Refl impossible)
-  decEq (RetroTime _)       (BoundedTime _)     = No (\case Refl impossible)
-  decEq (RetroTime _)       (WindowedTime _)    = No (\case Refl impossible)
-  decEq (RetroTime _)       OpenFuture          = No (\case Refl impossible)
-  decEq (RetroTime _)       BilateralTime       = No (\case Refl impossible)
-  decEq (WindowedTime _)    (StaticTime _ _)    = No (\case Refl impossible)
-  decEq (WindowedTime _)    (BoundedTime _)     = No (\case Refl impossible)
-  decEq (WindowedTime _)    (RetroTime _)       = No (\case Refl impossible)
-  decEq (WindowedTime _)    OpenFuture          = No (\case Refl impossible)
-  decEq (WindowedTime _)    BilateralTime       = No (\case Refl impossible)
-  decEq OpenFuture          (StaticTime _ _)    = No (\case Refl impossible)
-  decEq OpenFuture          (BoundedTime _)     = No (\case Refl impossible)
-  decEq OpenFuture          (RetroTime _)       = No (\case Refl impossible)
-  decEq OpenFuture          (WindowedTime _)    = No (\case Refl impossible)
-  decEq OpenFuture          BilateralTime       = No (\case Refl impossible)
-  decEq BilateralTime       (StaticTime _ _)    = No (\case Refl impossible)
-  decEq BilateralTime       (BoundedTime _)     = No (\case Refl impossible)
-  decEq BilateralTime       (RetroTime _)       = No (\case Refl impossible)
-  decEq BilateralTime       (WindowedTime _)    = No (\case Refl impossible)
-  decEq BilateralTime       OpenFuture          = No (\case Refl impossible)
-
-
 ------------------------------------------------------------------------
--- 2. STREAM STEP, TIME STREAM & LOCAL BRESENHAM PACING
+-- 8. STREAM STEP, TIME STREAM & LOCAL BRESENHAM PACING
 ------------------------------------------------------------------------
 
 ||| What happens at a single tick `n` of a TimeStream:
-||| - `StreamDone`  : Stream has naturally terminated (ground-state relaxation)
+||| - `StreamDone`  : Stream has naturally terminated (quiescent completion)
 ||| - `StreamSkip`  : Vacuum annihilation (`[+1, -1] = []`) or silent tick
-|||                   (consumes 1 causal `stepBudget`, 0 `GohFuel`!)
+|||                   (consumes 1 `stepBudget`, 0 `GohFuel`)
 ||| - `StreamYield` : Emits an active multiset term/delta
-|||                   (consumes 1 causal `stepBudget` AND 1 `GohFuel`)
+|||                   (consumes 1 `stepBudget` and `yieldCost` of `GohFuel`)
 public export
 data StreamStep : (a : Type) -> Type where
   StreamDone  : StreamStep a
@@ -873,12 +708,6 @@ Show a => Show (StreamStep a) where
   show StreamSkip      = "StreamSkip"
   show (StreamYield x) = "StreamYield(" ++ show x ++ ")"
 
-public export
-Functor StreamStep where
-  map _ StreamDone      = StreamDone
-  map _ StreamSkip      = StreamSkip
-  map f (StreamYield x) = StreamYield (f x)
-
 ||| A Time-indexed ongoing sequence / stream starting at `startTick`.
 ||| (Wildberger's `OnSeq` indexed by `Time` with `StreamStep` transitions).
 public export
@@ -886,11 +715,6 @@ record TimeStream (0 t : Time) (a : Type) where
   constructor MkTimeStream
   startTick : Nat
   stepAt    : Nat -> StreamStep a
-
-
-public export
-Functor (TimeStream t) where
-  map f (MkTimeStream s at) = MkTimeStream s (\n => map f (at n))
 
 ||| Local exact integer Bresenham pacing step with base tick budget `budget > 0`,
 ||| nonnegative local load `load`, and signed pacing balance `bal` (`MkBoxInt 0` at zero load).
@@ -911,15 +735,14 @@ paceStreamStep budget load (MkBoxInt b) =
            then (StreamYield (), MkBoxInt (if nextB < 0 then 0 else nextB))
            else (StreamSkip, MkBoxInt (b - budget))
 
-
 ------------------------------------------------------------------------
--- 3. FUEL EXHAUSTION & TIME-HORIZON FREEZE-OUT
+-- 9. FUEL EXHAUSTION & TIME-HORIZON FREEZE-OUT
 ------------------------------------------------------------------------
 
 ||| Termination classification when a `TimeStream` halts and freezes out into `StaticTime`:
-||| - `YieldExhausted`     : Energy/yield quota (`GohFuel cap`) reached 0 (crystal / particle freeze-out)
-||| - `StepHorizonReached` : Causal search horizon (`stepBudget`) reached 0 while yield remained (kinematic decoupling)
-||| - `NaturalCompletion`  : Stream emitted `StreamDone` before exhausting either budget (ground-state relaxation)
+||| - `YieldExhausted`     : Yield quota (`GohFuel cap`) reached 0
+||| - `StepHorizonReached` : Step horizon (`stepBudget`) reached 0 while yield remained
+||| - `NaturalCompletion`  : Stream emitted `StreamDone` before exhausting either budget
 public export
 data StreamFreezeReason : Type where
   YieldExhausted     : StreamFreezeReason
@@ -941,7 +764,7 @@ Show StreamFreezeReason where
 
 ||| Certified static relic produced when a dynamic `TimeStream` runs out of fuel
 ||| or completes at retrograde depth `g` (`RetroTime g`) and capacity `cap` (`BoundedTime cap`).
-||| Its phantom Time index transitions to `StaticTime (- cast g) (cast cap)`!
+||| Its phantom Time index transitions to `StaticTime (- cast g) (cast cap)`.
 public export
 record SolidifiedStream (0 frozenTime : Time) (cap : Nat) (a : Type) where
   constructor MkSolidifiedStream
@@ -962,48 +785,9 @@ public export
     s1.yieldsConsumed == s2.yieldsConsumed &&
     s1.stepsConsumed == s2.stepsConsumed
 
-||| Decoupled Yield/Step Freeze-Out Evaluator over any `TimeStream t a`:
-||| - `StreamSkip` consumes ONLY 1 unit of `stepBudget` (`sRem`), never draining `yieldFuel` (`yRem`)!
-||| - `StreamYield term` consumes BOTH 1 unit of `yieldFuel` and 1 unit of `stepBudget`,
-|||   accumulating `combine term acc`.
-||| - Freezes into `SolidifiedStream (StaticTime (- cast g) (cast cap)) cap a`.
-public export
-freezeTimeStreamWith :
-  {0 t : Time} ->
-  (g          : Nat) ->
-  (cap        : Nat) ->
-  (yieldFuel  : GohFuel cap) ->
-  (stepBudget : Nat) ->
-  (combine    : a -> a -> a) ->
-  (initAcc    : a) ->
-  TimeStream t a ->
-  SolidifiedStream (StaticTime (- cast g) (cast cap)) cap a
-freezeTimeStreamWith g cap yieldFuel stepBudget combine initAcc (MkTimeStream start at) =
-  loop (gohSteps yieldFuel) stepBudget start 0 0 initAcc
-  where
-    loop : (yRem : Nat) ->
-           (sRem : Nat) ->
-           (currTick : Nat) ->
-           (yUsed : Nat) ->
-           (sUsed : Nat) ->
-           (acc : a) ->
-           SolidifiedStream (StaticTime (- cast g) (cast cap)) cap a
-    loop Z sRem currTick yUsed sUsed acc =
-      MkSolidifiedStream acc YieldExhausted currTick yUsed sUsed (MkGohFuel 0) sRem
-    loop yRem Z currTick yUsed sUsed acc =
-      MkSolidifiedStream acc StepHorizonReached currTick yUsed sUsed (MkGohFuel yRem) 0
-    loop (S yRem) (S sRem) currTick yUsed sUsed acc =
-      case at currTick of
-        StreamDone =>
-          MkSolidifiedStream acc NaturalCompletion currTick yUsed sUsed (MkGohFuel (S yRem)) (S sRem)
-        StreamSkip =>
-          loop (S yRem) sRem (S currTick) yUsed (S sUsed) acc
-        StreamYield term =>
-          loop yRem sRem (S currTick) (S yUsed) (S sUsed) (combine term acc)
-
 ||| Stateful Streaming Freeze-Out Evaluator over an initial state `initA : a` populated at `t = 0`:
 ||| At each tick, `stepFn acc` emits `(StreamStep a, yieldCost, skipsSaved)`:
-||| - `StreamDone`      : ground-state relaxation (`NaturalCompletion`)
+||| - `StreamDone`      : natural termination (`NaturalCompletion`)
 ||| - `StreamSkip`      : consumes `0` `yieldFuel` and `1` `stepBudget`, banking `skipsSaved`
 ||| - `StreamYield nxt` : if `remYield < yieldCost`, freezes out with `YieldExhausted`;
 |||                       otherwise consumes `yieldCost` of `yieldFuel` and `1` `stepBudget`.
@@ -1034,4 +818,28 @@ freezeStateStreamWith g cap yieldFuel stepBudget stepFn initA =
           if yRem < yCost
             then (MkSolidifiedStream acc YieldExhausted currTick yUsed sUsed (MkGohFuel yRem) (S sRem), skAcc)
             else loop (minus yRem yCost) sRem (S currTick) (yUsed + yCost) (S sUsed) (skAcc + sk) nxt
+
+||| Decoupled Yield/Step Freeze-Out Evaluator over any `TimeStream t a`,
+||| expressed directly as a thin specialization of `freezeStateStreamWith`.
+public export
+freezeTimeStreamWith :
+  {0 t : Time} ->
+  (g          : Nat) ->
+  (cap        : Nat) ->
+  (yieldFuel  : GohFuel cap) ->
+  (stepBudget : Nat) ->
+  (combine    : a -> a -> a) ->
+  (initAcc    : a) ->
+  TimeStream t a ->
+  SolidifiedStream (StaticTime (- cast g) (cast cap)) cap a
+freezeTimeStreamWith g cap yieldFuel stepBudget combine initAcc (MkTimeStream start at) =
+  let (r, _) = freezeStateStreamWith g cap yieldFuel stepBudget
+                 (\(tk, acc) =>
+                    case at tk of
+                      StreamDone       => (StreamDone, 0, 0)
+                      StreamSkip       => (StreamYield (S tk, acc), 0, 1)
+                      StreamYield term => (StreamYield (S tk, combine term acc), 1, 0))
+                 (start, initAcc)
+  in MkSolidifiedStream (snd r.relicState) r.freezeReason (fst r.relicState)
+                        r.yieldsConsumed r.stepsConsumed r.remainingYield r.remainingSteps
 
