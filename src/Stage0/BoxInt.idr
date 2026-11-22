@@ -57,6 +57,24 @@ public export
 divIntegerPos : Integer -> Integer -> Integer
 divIntegerPos num den = fst (divModIntegerPos num den)
 
+||| Total O(log N) Euclidean integer division and remainder (`a = q * b + r`, `0 <= r < |b|`,
+||| returning `(0, 0)` when `b == 0`; `assert_total`-free).
+public export
+divModIntegerEuclid : Integer -> Integer -> (Integer, Integer)
+divModIntegerEuclid a b =
+  if b == 0
+    then (0, 0)
+    else
+      let absA      = if a < 0 then -a else a
+          absB      = if b < 0 then -b else b
+          (q0, r0)  = divModIntegerPos absA absB
+          (qPos, r) = if a >= 0
+                        then (q0, r0)
+                        else if r0 == 0
+                          then (-q0, 0)
+                          else (-(q0 + 1), absB - r0)
+      in if b > 0 then (qPos, r) else (-qPos, r)
+
 public export
 intToBoxInt : Integer -> BoxInt
 intToBoxInt n = MkBoxInt n
@@ -161,16 +179,16 @@ Neg BoxInt where
 
 %inline public export
 divBox : BoxInt -> BoxInt -> BoxInt
-divBox (MkBoxInt a) (MkBoxInt b) = MkBoxInt (case b of 0 => 0; _ => assert_total (a `div` b))
+divBox (MkBoxInt a) (MkBoxInt b) = MkBoxInt (fst (divModIntegerEuclid a b))
 
 %inline public export
 modBox : BoxInt -> BoxInt -> BoxInt
-modBox (MkBoxInt a) (MkBoxInt b) = MkBoxInt (case b of 0 => 0; _ => assert_total (a `mod` b))
+modBox (MkBoxInt a) (MkBoxInt b) = MkBoxInt (snd (divModIntegerEuclid a b))
 
 public export
 Integral BoxInt where
-  div (MkBoxInt a) (MkBoxInt b) = MkBoxInt (case b of 0 => 0; _ => assert_total (a `div` b))
-  mod (MkBoxInt a) (MkBoxInt b) = MkBoxInt (case b of 0 => 0; _ => assert_total (a `mod` b))
+  div = divBox
+  mod = modBox
 
 public export
 Abs BoxInt where

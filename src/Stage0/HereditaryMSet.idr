@@ -125,21 +125,6 @@ public export
 originMultiplicity : MultisetWeight c => HereditaryMSet c -> c
 originMultiplicity = lookupKeyHMSet emptyHMSet
 
-||| Fundamental inertial mass seed from symmetric motion (B_0 = +2).
-public export
-originInertialSeed : BoxInt
-originInertialSeed = intToBoxInt 2
-
-||| Fundamental binding defect seed from dipole cross-terms (-2).
-public export
-originBindingSeed : BoxInt
-originBindingSeed = intToBoxInt (-2)
-
-||| Observes the multiplicity at prime harmonic key p (\alpha^p).
-public export
-primeHarmonicMultiplicity : Nat -> PureMultiset -> BoxInt
-primeHarmonicMultiplicity p = lookupPureKey (scalarKeyHMSet (cast p))
-
 mutual
   public export
   showHMSetFuel : Show c => Nat -> HereditaryMSet c -> String
