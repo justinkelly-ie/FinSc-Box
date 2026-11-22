@@ -270,29 +270,62 @@ pythChoosePair sSum dDiff numD numU rDen eOld =
                        then (dC, uR)
                        else pythFallbackPair sSum dDiff numD numU rDen
 
-||| Wildberger parametric Pythagorean `(m^2 - 1, 2m, m^2 + 1)` exact integer rotation
-||| on `(pA, pB, u)` for any `m >= 2`:
-|||   1. Preserves `pA + pB` identically.
-|||   2. Uses energy-guarded nearest-integer rounding (`rdivPosBox`) with exact Lyapunov
-|||      fallback to `tdivPosBox`, guaranteeing `2*(valA^2 + valB^2) + valU^2 <= 2*(pA^2 + pB^2) + u^2`.
+||| Generates the elementary Pythagorean triple `(m^2 - 1, 2m, m^2 + 1)` for `m >= 2`.
 public export
-rotatePythParam : (m, pA, pB, u : BoxInt) -> PythPairResult
-rotatePythParam (MkBoxInt mIn) pA pB u =
+pythGeneratorTriple : BoxInt -> (Integer, Integer, Integer)
+pythGeneratorTriple (MkBoxInt mIn) =
+  let mVal = if mIn < 2 then 2 else mIn
+      m2   = mVal * mVal
+  in (m2 - 1, 2 * mVal, m2 + 1)
+
+||| Exact Gaussian composition `(a1 + i b1) * (a2 + i b2)` of two Pythagorean triples,
+||| preserving `A^2 + B^2 = R^2` and multiplying rational spreads via spread polynomial composition.
+public export
+pythComposeTriple : (Integer, Integer, Integer) -> (Integer, Integer, Integer) -> (Integer, Integer, Integer)
+pythComposeTriple (a1, b1, r1) (a2, b2, r2) =
+  (a1 * a2 - b1 * b2, a1 * b2 + b1 * a2, r1 * r2)
+
+||| Computes the `y`-th composite Pythagorean triple `(A_y, B_y, R_y) = (A_1 + i B_1)^y`
+||| whose spread is the exact `y`-fold spread polynomial `S_y(s(m)) = Z_y(4 s(m)) / 4`.
+public export
+pythPowerTriple : (y : Nat) -> (m : BoxInt) -> (Integer, Integer, Integer)
+pythPowerTriple Z           _ = (1, 0, 1)
+pythPowerTriple (S Z)       m = pythGeneratorTriple m
+pythPowerTriple (S (S rem)) m =
+  let base = pythGeneratorTriple m
+  in go rem base base
+  where
+    go : Nat -> (Integer, Integer, Integer) -> (Integer, Integer, Integer) -> (Integer, Integer, Integer)
+    go Z     step acc = pythComposeTriple acc step
+    go (S k) step acc = go k step (pythComposeTriple acc step)
+
+||| Applies an exact integer Pythagorean rotation specified by `(aCoef, bCoef, rDen)` (`a^2 + b^2 = r^2`)
+||| to `(pA, pB, u)`, preserving `pA + pB` identically and monotonically bounding `2*(pA^2 + pB^2) + u^2`.
+public export
+rotatePythTriple : (Integer, Integer, Integer) -> (pA, pB, u : BoxInt) -> PythPairResult
+rotatePythTriple (aCoef, bCoef, rDen) pA pB u =
   let dDiff = subBox pB pA
-  in if boxIsZero dDiff && boxIsZero u
+  in if (boxIsZero dDiff && boxIsZero u) || bCoef == 0 || rDen <= 0
        then MkPythPairResult pA pB u
        else
-         let mVal          = if mIn < 2 then 2 else mIn
-             m2            = mVal * mVal
-             aCoef         = m2 - 1
-             bCoef         = 2 * mVal
-             rDen          = m2 + 1
-             sSum          = addBox pA pB
-             MkBoxInt dV   = dDiff
-             MkBoxInt uV   = u
-             numD          = MkBoxInt (aCoef * dV + bCoef * uV)
-             numU          = MkBoxInt (aCoef * uV - bCoef * dV)
-             eOld          = dV * dV + uV * uV
-             (dN, uN)      = pythChoosePair sSum dDiff numD numU rDen eOld
+         let sSum        = addBox pA pB
+             MkBoxInt dV = dDiff
+             MkBoxInt uV = u
+             numD        = MkBoxInt (aCoef * dV + bCoef * uV)
+             numU        = MkBoxInt (aCoef * uV - bCoef * dV)
+             eOld        = dV * dV + uV * uV
+             (dN, uN)    = pythChoosePair sSum dDiff numD numU rDen eOld
          in MkPythPairResult (tdiv2Box (subBox sSum dN)) (tdiv2Box (addBox sSum dN)) uN
+
+||| Applies the `y`-fold composed Pythagorean rotation `(A_1 + i B_1)^y` for generator `m >= 2`.
+public export
+rotatePythPow : (y : Nat) -> (m, pA, pB, u : BoxInt) -> PythPairResult
+rotatePythPow Z       _ pA pB u = MkPythPairResult pA pB u
+rotatePythPow y@(S _) m pA pB u = rotatePythTriple (pythPowerTriple y m) pA pB u
+
+||| Wildberger parametric Pythagorean `(m^2 - 1, 2m, m^2 + 1)` exact integer rotation
+||| on `(pA, pB, u)` for any `m >= 2` (`y = 1` specialization of `rotatePythPow`).
+public export
+rotatePythParam : (m, pA, pB, u : BoxInt) -> PythPairResult
+rotatePythParam = rotatePythPow 1
 
