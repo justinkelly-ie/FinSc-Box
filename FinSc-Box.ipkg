@@ -18,28 +18,9 @@ modules = Stage0.BoxInt
         , Stage1.ConvolutionAdmissibility
         , Stage1.Views
         , Stage1.Lenses
-        , Stage1.Carrier.Vexel
-        , Stage1.Carrier.Maxel
-        , Stage1.Carrier.Voxel
-        , Stage1.Carrier.Boxel
         , Stage1.ProjectiveRotation
         , Stage1.MultisetCodec
         , Stage1.BlackRedZoom
-        , FinScBox.BoxInt
-        , FinScBox.Interfaces
-        , FinScBox.Box
-        , FinScBox.HereditaryMSet
-        , FinScBox.Multiset
-        , FinScBox.Multiplicity
-        , FinScBox.Space
-        , FinScBox.SpaceStream
-        , FinScBox.Time
-        , FinScBox.ConvolutionAdmissibility
-        , FinScBox.ProjectiveRotation
-        , FinScBox.MultisetCodec
-        , FinScBox.BlackRedZoom
-        , FinScBox.Views
-        , FinScBox.Lenses
         , FinScBox
 
 sourcedir = "src"
