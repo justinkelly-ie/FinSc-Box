@@ -181,6 +181,12 @@ public export
 sumHMSet : MultisetWeight c => HereditaryMSet c -> c
 sumHMSet (MkHMSet b) = totalMassBox b
 
+||| Multiset linear combination (`flattenHMSetBox`): sums `scaleHMSet w k` over all `(k, w)` in `b`.
+public export
+flattenHMSetBox : MultisetWeight c => Box c (HereditaryMSet c) -> HereditaryMSet c
+flattenHMSetBox =
+  foldBox (\k, w, acc => addHMSet acc (scaleHMSet w k)) emptyHMSet
+
 ||| Pairwise box convolution parameterized by an inner key-combining operation.
 public export
 convolveWith : MultisetWeight c =>
