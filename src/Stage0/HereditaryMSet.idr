@@ -418,6 +418,18 @@ evalHomogPolyHMSet deg (MkHMSet b) num den =
           b
 
 
+||| Recursive unit-weight support projection of a `HereditaryMSet c`:
+||| strips all multiplicities and signs down to `oneWeight` at every hereditary level via `supportBox`.
+public export
+MSetSupportLoop : MultisetWeight c => Nat -> HereditaryMSet c -> HereditaryMSet c
+MSetSupportLoop Z _ = emptyHMSet
+MSetSupportLoop (S rem) (MkHMSet b) =
+  MkHMSet (foldBox (\k, _, acc => setBox (MSetSupportLoop rem k) oneWeight acc) BoxLeaf (supportBox b))
+
+public export
+MSetSupport : MultisetWeight c => HereditaryMSet c -> HereditaryMSet c
+MSetSupport m = MSetSupportLoop (hmDepth m) m
+
 ------------------------------------------------------------------------
 -- CONSTRUCTIVIST HEREDITARY MULTISET RECOGNIZER (`recognition-rule.md`)
 ------------------------------------------------------------------------
