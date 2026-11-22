@@ -933,6 +933,17 @@ shiftConvolveMaxel {form} shiftAdd (MkMaxel m) shiftBox =
                                outer shiftBox)
                     BoxLeaf m
 
+||| Sparse N-axis balanced unit-shift multiset `[+d_1, -d_1, ..., +d_n, -d_n]` given a coordinate negator.
+public export
+unitAxesWith : (Ord k, MultisetWeight c) => (negShift : k -> k) -> List k -> Box c k
+unitAxesWith negShift =
+  foldl (\acc, d => addAtKeyBox (negShift d) oneWeight (addAtKeyBox d oneWeight acc)) BoxLeaf
+
+||| Sparse N-axis balanced unit-shift multiset `[+d_1, -d_1, ..., +d_n, -d_n]` over any `GroupCoord k`.
+public export
+unitAxes : (GroupCoord k, MultisetWeight c) => List k -> Box c k
+unitAxes = unitAxesWith inverse
+
 ||| Sparse 2-axis balanced unit-shift multiset `[+dx, -dx, +dy, -dy]` given a coordinate negator.
 public export
 unitAxes2DWith : (Ord k, MultisetWeight c) => (negShift : k -> k) -> (dx, dy : k) -> Box c k
