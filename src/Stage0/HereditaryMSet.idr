@@ -272,6 +272,151 @@ Neg PureMultiset where
   negate = negHMSet
   (-) = subHMSet
 
+------------------------------------------------------------------------
+-- 5. PUREMULTISET SPREAD POLYNUMBERS & GOH CYCLOTOMIC FACTORS
+------------------------------------------------------------------------
+
+||| Monomial indeterminate `x = { { [] : 1 } : 1 }` inside `PureMultiset`.
+||| Because `Num PureMultiset` defines `(+)` = `addHMSet`, `(*)` = `mulHMSet` (Cauchy convolution),
+||| and `fromInteger c` = `{ [] : c }` (degree-0 constant `c * x^0`), every polynomial in `Z[x]`
+||| is natively a `PureMultiset` with zero extra types.
+public export
+polyX : PureMultiset
+polyX = MkHMSet (singletonBox (scalarKeyHMSet 1) (intToBoxInt 1))
+
+||| Cigler-Herbig irreducible spread polynomial factors `Psi_1(x) .. Psi_10(x), Psi_12(x)` natively in `PureMultiset`:
+||| - `Psi_1(x)  = x` (deg 1 = phi(1), root at `x = 0`)
+||| - `Psi_2(x)  = 4 - x` (deg 1 = phi(2), root at `x = 4`, fixed point `Psi_2(2) = 2`, von Mangoldt `Psi_2(0) = 2^2 = 4`)
+||| - `Psi_3(x)  = (x - 3)^2` (deg 2 = phi(3), double root at `x = 3`, von Mangoldt `Psi_3(0) = 3^2 = 9`)
+||| - `Psi_4(x)  = (x - 2)^2` (deg 2 = phi(4), double root at `x = 2`, von Mangoldt `Psi_4(0) = 2^2 = 4`)
+||| - `Psi_5(x)  = (x^2 - 5x + 5)^2` (deg 4 = phi(5), von Mangoldt `Psi_5(0) = 5^2 = 25`)
+||| - `Psi_6(x)  = (x - 1)^2` (deg 2 = phi(6), double root at `x = 1`, composite von Mangoldt `Psi_6(0) = 1^2 = 1`)
+||| - `Psi_7(x)  = (x^3 - 7x^2 + 14x - 7)^2` (deg 6 = phi(7), von Mangoldt `Psi_7(0) = 7^2 = 49`)
+||| - `Psi_8(x)  = (x^2 - 4x + 2)^2` (deg 4 = phi(8), prime-power von Mangoldt `Psi_8(0) = 2^2 = 4`)
+||| - `Psi_9(x)  = (x^3 - 6x^2 + 9x - 3)^2` (deg 6 = phi(9), prime-power von Mangoldt `Psi_9(0) = 3^2 = 9`)
+||| - `Psi_10(x) = (x^2 - 3x + 1)^2` (deg 4 = phi(10), composite von Mangoldt `Psi_10(0) = 1^2 = 1`)
+||| - `Psi_12(x) = (x^2 - 4x + 1)^2` (deg 4 = phi(12), composite von Mangoldt `Psi_12(0) = 1^2 = 1`)
+public export
+gohPsi1 : PureMultiset
+gohPsi1 = polyX
+
+public export
+gohPsi2 : PureMultiset
+gohPsi2 = 4 - polyX
+
+public export
+gohPsi3 : PureMultiset
+gohPsi3 = (polyX - 3) * (polyX - 3)
+
+public export
+gohPsi4 : PureMultiset
+gohPsi4 = (polyX - 2) * (polyX - 2)
+
+public export
+gohPsi5 : PureMultiset
+gohPsi5 =
+  let q = polyX * polyX - 5 * polyX + 5
+  in q * q
+
+public export
+gohPsi6 : PureMultiset
+gohPsi6 = (polyX - 1) * (polyX - 1)
+
+public export
+gohPsi7 : PureMultiset
+gohPsi7 =
+  let x2 = polyX * polyX
+      q  = x2 * polyX - 7 * x2 + 14 * polyX - 7
+  in q * q
+
+public export
+gohPsi8 : PureMultiset
+gohPsi8 =
+  let q = polyX * polyX - 4 * polyX + 2
+  in q * q
+
+public export
+gohPsi9 : PureMultiset
+gohPsi9 =
+  let x2 = polyX * polyX
+      q  = x2 * polyX - 6 * x2 + 9 * polyX - 3
+  in q * q
+
+public export
+gohPsi10 : PureMultiset
+gohPsi10 =
+  let q = polyX * polyX - 3 * polyX + 1
+  in q * q
+
+public export
+gohPsi12 : PureMultiset
+gohPsi12 =
+  let q = polyX * polyX - 4 * polyX + 1
+  in q * q
+
+public export
+gohPsiFactor : Nat -> PureMultiset
+gohPsiFactor 1  = gohPsi1
+gohPsiFactor 2  = gohPsi2
+gohPsiFactor 3  = gohPsi3
+gohPsiFactor 4  = gohPsi4
+gohPsiFactor 5  = gohPsi5
+gohPsiFactor 6  = gohPsi6
+gohPsiFactor 7  = gohPsi7
+gohPsiFactor 8  = gohPsi8
+gohPsiFactor 9  = gohPsi9
+gohPsiFactor 10 = gohPsi10
+gohPsiFactor 12 = gohPsi12
+gohPsiFactor _  = 1
+
+||| 3-term Cigler-Herbig scaled spread polynomial recurrence directly in `PureMultiset`:
+|||   `Z_{n+3}(x) = (3 - x) * Z_{n+2}(x) + (x - 3) * Z_{n+1}(x) + Z_n(x)`
+public export
+stepSpreadZHMSet : PureMultiset -> PureMultiset -> PureMultiset -> PureMultiset
+stepSpreadZHMSet zn zn1 zn2 =
+  (3 - polyX) * zn2 + (polyX - 3) * zn1 + zn
+
+public export
+spreadZHMSet : Nat -> PureMultiset
+spreadZHMSet Z               = emptyPureMSet
+spreadZHMSet (S Z)           = polyX
+spreadZHMSet (S (S Z))       = 4 * polyX - polyX * polyX
+spreadZHMSet (S (S (S Z)))   = 9 * polyX - 6 * polyX * polyX + polyX * polyX * polyX
+spreadZHMSet (S (S (S (S k)))) =
+  go k polyX (4 * polyX - polyX * polyX) (9 * polyX - 6 * polyX * polyX + polyX * polyX * polyX)
+  where
+    go : Nat -> PureMultiset -> PureMultiset -> PureMultiset -> PureMultiset
+    go Z       zn zn1 zn2 = stepSpreadZHMSet zn zn1 zn2
+    go (S rem) zn zn1 zn2 = go rem zn1 zn2 (stepSpreadZHMSet zn zn1 zn2)
+
+public export
+powNatNum : Num a => a -> Nat -> a
+powNatNum _ Z     = fromInteger 1
+powNatNum x (S k) = x * powNatNum x k
+
+||| Polymorphic `PureMultiset` polynomial evaluator:
+||| - When `a = Integer`, evaluates `P(x0) in Z`.
+||| - When `a = PureMultiset`, evaluates symbolic polynomial composition `(P o Q)(x) = P(Q(x))` in `PureMultiset`.
+public export
+evalPolyHMSetAt : Num a => PureMultiset -> a -> a
+evalPolyHMSetAt (MkHMSet b) x =
+  foldBox (\k, (MkBoxInt c), acc =>
+             let deg = boxToNat (originMultiplicity k)
+             in acc + fromInteger c * powNatNum x deg)
+          (fromInteger 0)
+          b
+
+||| Evaluates the degree-`deg` homogenization `den^deg * P(num / den)` of a `PureMultiset` polynomial `P`,
+||| connecting rational spread evaluation `Z_y(4 * B_1^2 / R_1^2)` to integer Pythagorean powers `4 * B_y^2`.
+public export
+evalHomogPolyHMSet : (deg : Nat) -> PureMultiset -> (num, den : Integer) -> Integer
+evalHomogPolyHMSet deg (MkHMSet b) num den =
+  foldBox (\k, (MkBoxInt c), acc =>
+             let d = boxToNat (originMultiplicity k)
+             in acc + c * powNatNum num d * powNatNum den (minus deg d))
+          0
+          b
+
 
 ------------------------------------------------------------------------
 -- CONSTRUCTIVIST HEREDITARY MULTISET RECOGNIZER (`recognition-rule.md`)
