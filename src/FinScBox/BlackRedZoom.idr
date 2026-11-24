@@ -1,11 +1,11 @@
 module FinScBox.BlackRedZoom
 
 import Data.Nat
-import public FinScBox.BoxInt
-import public FinScBox.Interfaces
-import public FinScBox.Box
-import public FinScBox.HereditaryMSet
-import public FinScBox.Views
+import FinScBox.BoxInt
+import FinScBox.Interfaces
+import FinScBox.Box
+import FinScBox.HereditaryMSet
+import FinScBox.Views
 
 %default total
 

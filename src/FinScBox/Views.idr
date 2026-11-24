@@ -1,7 +1,10 @@
 module FinScBox.Views
 
 import Data.Nat
-import public FinScBox.HereditaryMSet
+import FinScBox.BoxInt
+import FinScBox.Interfaces
+import FinScBox.Box
+import FinScBox.HereditaryMSet
 
 %default total
 
