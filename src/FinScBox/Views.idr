@@ -1,5 +1,6 @@
 module FinScBox.Views
 
+import Data.Nat
 import public FinScBox.HereditaryMSet
 
 %default total
@@ -39,7 +40,7 @@ viewAsAntiBox : QuantumMultiplicity c => HereditaryMSet c -> AntiBoxView c
 viewAsAntiBox m@(MkHMSet tree) = antiBoxLoop (S (boxNodeCount tree)) m
 
 ------------------------------------------------------------------------
--- 2. DUAL-CHANNEL VIEW (DISJOINT MATTER M_+ & ANTIMATTER M_- CHANNELS)
+-- 2. DUAL-CHANNEL VIEW (DISJOINT POSITIVE & NEGATIVE CHANNELS)
 ------------------------------------------------------------------------
 
 ||| Splits a signed `HereditaryMSet c` into two disjoint positive-magnitude channels.
@@ -61,13 +62,98 @@ public export
 interactChannels : MultisetWeight c => DualChannelView c -> HereditaryMSet c
 interactChannels (MkDualChannels posM negM) = subHMSet posM negM
 
-
 public export
 isHMBoxLeaf : HereditaryMSet c -> Bool
 isHMBoxLeaf (MkHMSet BoxLeaf) = True
 isHMBoxLeaf _                 = False
 
-||| Boolean check that  () and  () share zero active keys.
+||| Boolean check that `posChannel` and `negChannel` share zero active keys.
 public export
 disjointDualSupports : MultisetWeight c => DualChannelView c -> Bool
 disjointDualSupports (MkDualChannels p n) = isHMBoxLeaf (hadamardHMSet p n)
+
+------------------------------------------------------------------------
+-- 3. STREAMING PEEL-WORK REDUCTIONS (`Time = Peeling Work`)
+------------------------------------------------------------------------
+
+||| Work executed by streaming quantum-by-quantum reduction over a multiset:
+||| - `workSteps`     : Quantum-peeling steps (`PopBlackBox`/`PopRedBox` across nesting levels)
+||| - `annihilations` : Paired opposite quanta cancelled (`[+1, -1] = []`)
+||| - `residualL1`    : Remaining L1 magnitude after zero-pruning
+public export
+record StreamWorkReport where
+  constructor MkStreamWorkReport
+  workSteps     : Nat
+  annihilations : Nat
+  residualL1    : Nat
+
+public export
+Eq StreamWorkReport where
+  a == b = a.workSteps == b.workSteps && a.annihilations == b.annihilations && a.residualL1 == b.residualL1
+
+public export
+Show StreamWorkReport where
+  show w =
+    "StreamWork(steps=" ++ show w.workSteps ++
+    ", annih=" ++ show w.annihilations ++
+    ", L1=" ++ show w.residualL1 ++ ")"
+
+mutual
+  ||| Peels every outer quantum of a `HereditaryMSet BoxInt` via `viewAsAntiBox`,
+  ||| recursively charging nested key peels so `zoomSpace (blackShift k)` increases stream work.
+  public export
+  peelQuantaWorkLoop : Nat -> Nat -> HereditaryMSet BoxInt -> Nat
+  peelQuantaWorkLoop _         Z         _ = 0
+  peelQuantaWorkLoop depthFuel (S qFuel) m =
+    case viewAsAntiBox m of
+      EmptyVacuum => 0
+      PopBlackBox term rest =>
+        S (peelNestedWork depthFuel term + peelQuantaWorkLoop depthFuel qFuel rest)
+      PopRedBox term rest =>
+        S (peelNestedWork depthFuel term + peelQuantaWorkLoop depthFuel qFuel rest)
+
+  public export
+  peelNestedWork : Nat -> HereditaryMSet BoxInt -> Nat
+  peelNestedWork Z         _                 = 0
+  peelNestedWork _         (MkHMSet BoxLeaf) = 0
+  peelNestedWork (S dFuel) m@(MkHMSet b)     =
+    peelQuantaWorkLoop dFuel (S (collectSupportStats b).totalMass) m
+
+||| Evaluates streaming quantum-peeling work on a `HereditaryMSet BoxInt`.
+||| Empty vacuum `[]` requires strictly `0` work steps.
+public export
+streamPeelWorkHMSet : HereditaryMSet BoxInt -> StreamWorkReport
+streamPeelWorkHMSet (MkHMSet BoxLeaf) = MkStreamWorkReport 0 0 0
+streamPeelWorkHMSet m@(MkHMSet b) =
+  let resL1 = (collectSupportStats b).totalMass
+      steps = peelNestedWork (hmDepth m) m
+  in MkStreamWorkReport steps 0 resL1
+
+||| Exact `O(tree-size)` structural peel-step counter matching `streamPeelWorkHMSet` without
+||| unary quantum-by-quantum loops.
+public export
+fastPeelWorkLoop : Nat -> HereditaryMSet BoxInt -> Nat
+fastPeelWorkLoop Z _ = 0
+fastPeelWorkLoop _ (MkHMSet BoxLeaf) = 0
+fastPeelWorkLoop (S dFuel) (MkHMSet b) =
+  foldBox (\k, w, acc => acc + weightMagnitude w * S (fastPeelWorkLoop dFuel k)) 0 b
+
+||| Computes the exact nested peel-work step count of any `HereditaryMSet BoxInt` in `O(nodes)`.
+public export
+fastPeelWorkHMSet : HereditaryMSet BoxInt -> Nat
+fastPeelWorkHMSet m = fastPeelWorkLoop (hmDepth m) m
+
+||| Merges two `HereditaryMSet BoxInt` operands via `addHMSet`, recording
+||| total peeling work steps and annihilated Black/Red pairs (`[+1, -1] = []`).
+public export
+streamMergeWorkHMSet : HereditaryMSet BoxInt ->
+                       HereditaryMSet BoxInt ->
+                       (HereditaryMSet BoxInt, StreamWorkReport)
+streamMergeWorkHMSet a b =
+  let rA     = streamPeelWorkHMSet a
+      rB     = streamPeelWorkHMSet b
+      merged = addHMSet a b
+      rM     = streamPeelWorkHMSet merged
+      rawL1  = rA.residualL1 + rB.residualL1
+      diff   = if rawL1 >= rM.residualL1 then minus rawL1 rM.residualL1 else 0
+  in (merged, MkStreamWorkReport (rA.workSteps + rB.workSteps) (half diff) rM.residualL1)

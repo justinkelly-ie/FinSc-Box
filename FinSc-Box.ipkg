@@ -10,7 +10,7 @@ modules = FinScBox.BoxInt
         , FinScBox.Interfaces
         , FinScBox.Box
         , FinScBox.HereditaryMSet
-        , FinScBox.ProjectiveRotation
+        , FinScBox.QuadraticExchange
         , FinScBox.MultisetCodec
         , FinScBox.Views
         , FinScBox.BlackRedZoom
