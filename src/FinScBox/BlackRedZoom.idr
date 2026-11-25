@@ -13,26 +13,14 @@ import FinScBox.Views
 -- 1. BLACK / RED SHIFT MULTISETS (`[+1, -1] = []`)
 --------------------------------------------------------------------------------
 
-||| A signed Black/Red multiset shift parameter replacing raw `Int` offsets.
-||| - Black (`+1`) shifts step forward/inward in Time or wrap deeper in Space.
-||| - Red (`-1`) shifts step backward/outward in Time or unwrap coarser in Space.
-||| - Adding equal Black and Red shifts annihilates to `emptyPureMSet` (`[]`).
-public export
-BlackRedMSet : Type
-BlackRedMSet = PureMultiset
-
-public export
-zeroShift : BlackRedMSet
-zeroShift = emptyPureMSet
-
 ||| Constructs `n` Black (`+1`) shift quanta at the origin `[]`.
 public export
-blackShift : Nat -> BlackRedMSet
+blackShift : Nat -> PureMultiset
 blackShift n = scalarKeyHMSet (cast n)
 
 ||| Constructs `n` Red (`-1`) shift quanta at the origin `[]`.
 public export
-redShift : Nat -> BlackRedMSet
+redShift : Nat -> PureMultiset
 redShift n = scalarKeyHMSet (- cast n)
 
 --------------------------------------------------------------------------------
@@ -40,12 +28,12 @@ redShift n = scalarKeyHMSet (- cast n)
 --------------------------------------------------------------------------------
 
 ||| Horizontal scale/time shift via Laurent Cauchy multiplication (`alpha^shift * m`).
-||| Adding `blackShift 1` and `redShift 1` yields `zeroShift = []`, so
+||| Adding `blackShift 1` and `redShift 1` yields `emptyHMSet = []`, so
 ||| `zoomTime (blackShift 1 + redShift 1) m == m` holds identically!
 public export
-zoomTime : (shift : BlackRedMSet) -> PureMultiset -> PureMultiset
+zoomTime : (shift : PureMultiset) -> PureMultiset -> PureMultiset
 zoomTime shift m =
-  mulHMSet (MkHMSet (singletonBox shift (intToBoxInt 1))) m
+  mulHMSet (MkHMSet (singletonBox shift (MkBoxInt 1))) m
 
 --------------------------------------------------------------------------------
 -- 3. MULTISET-NATIVE `zoomSpace` (VERTICAL NESTING / CONTRACTION VIA ANTI-BOX)
@@ -54,17 +42,17 @@ zoomTime shift m =
 ||| Wraps a `PureMultiset` one hereditary bracket deeper: `M -> { M : [1] }`.
 public export
 wrapBox : PureMultiset -> PureMultiset
-wrapBox m = MkHMSet (singletonBox m (intToBoxInt 1))
+wrapBox m = MkHMSet (singletonBox m (MkBoxInt 1))
 
 ||| Contracts one hereditary bracket level: `{ k_i : [w_i] } -> \sum w_i * k_i`.
 ||| Exact left-inverse of `wrapBox`: `unwrapBoxLevel (wrapBox m) == m` for all `m`!
 public export
 unwrapBoxLevel : PureMultiset -> PureMultiset
 unwrapBoxLevel (MkHMSet b) =
-  foldBox (\k, w, acc => addHMSet acc (scaleHMSet w k)) emptyPureMSet b
+  foldBox (\k, w, acc => addHMSet acc (scaleHMSet w k)) emptyHMSet b
 
 public export
-zoomSpaceLoop : Nat -> BlackRedMSet -> PureMultiset -> PureMultiset
+zoomSpaceLoop : Nat -> PureMultiset -> PureMultiset -> PureMultiset
 zoomSpaceLoop Z _ m = m
 zoomSpaceLoop (S fuel) shift m =
   case viewAsAntiBox shift of
@@ -76,7 +64,7 @@ zoomSpaceLoop (S fuel) shift m =
 ||| Each `+1` Black quantum in `shift` wraps `m` one structural level deeper (`wrapBox`);
 ||| each `-1` Red quantum unwraps `m` one structural level coarser (`unwrapBoxLevel`).
 public export
-zoomSpace : (shift : BlackRedMSet) -> PureMultiset -> PureMultiset
+zoomSpace : (shift : PureMultiset) -> PureMultiset -> PureMultiset
 zoomSpace shift@(MkHMSet b) m =
   let fuel = S (collectSupportStats b).totalMass
   in zoomSpaceLoop fuel shift m
@@ -89,13 +77,13 @@ zoomSpace shift@(MkHMSet b) m =
 public export
 sampleUnitPairMSet : PureMultiset
 sampleUnitPairMSet =
-  subHMSet (MkHMSet (singletonBox (scalarKeyHMSet 1) (intToBoxInt 1)))
-           (MkHMSet (singletonBox (scalarKeyHMSet (-1)) (intToBoxInt 1)))
+  subHMSet (MkHMSet (singletonBox (scalarKeyHMSet 1) (MkBoxInt 1)))
+           (MkHMSet (singletonBox (scalarKeyHMSet (-1)) (MkBoxInt 1)))
 
 public export
 0 prfBlackRedAnnihilates :
   addHMSet (FinScBox.BlackRedZoom.blackShift 1) (FinScBox.BlackRedZoom.redShift 1) =
-  FinScBox.HereditaryMSet.emptyPureMSet
+  FinScBox.HereditaryMSet.emptyHMSet
 prfBlackRedAnnihilates = Refl
 
 public export

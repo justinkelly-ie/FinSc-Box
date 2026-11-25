@@ -30,20 +30,6 @@ boxNodeCount : Box c k -> Nat
 boxNodeCount BoxLeaf             = Z
 boxNodeCount (BoxNode _ l _ _ r) = S (boxNodeCount l + boxNodeCount r)
 
-||| Exponential height upper bound `2^h` for AVL capacity fuel.
-public export
-pow2BoxBound : Nat -> Nat
-pow2BoxBound Z     = 1
-pow2BoxBound (S k) =
-  let p = pow2BoxBound k
-  in p + p
-
-||| O(h) = O(log N) AVL node capacity upper bound derived from cached root height `h`: `2^h - 1`.
-public export
-boxTreeCapacityBound : Box c k -> Nat
-boxTreeCapacityBound BoxLeaf             = Z
-boxTreeCapacityBound (BoxNode h _ _ _ _) = minus (pow2BoxBound h) 1
-
 ||| Construct an AVL node recomputing cached height in O(1).
 public export
 mkBoxNode : Box c k -> k -> c -> Box c k -> Box c k
@@ -68,7 +54,7 @@ rotateLeftBox : Box c k -> k -> c -> Box c k -> Box c k
 rotateLeftBox l x c (BoxNode _ rl rx rc rr) = mkBoxNode (mkBoxNode l x c rl) rx rc rr
 rotateLeftBox l x c r                       = mkBoxNode l x c r
 
-||| AVL height-rebalancing constructor (`balanceBoxNode` / `balanceBox`).
+||| AVL height-rebalancing constructor.
 public export
 balanceBoxNode : Box c k -> k -> c -> Box c k -> Box c k
 balanceBoxNode l x c r =
@@ -91,25 +77,15 @@ balanceBoxNode l x c r =
      else
        mkBoxNode l x c r
 
-||| Canonical AVL rebalance alias.
-public export
-balanceBox : Box c k -> k -> c -> Box c k -> Box c k
-balanceBox = balanceBoxNode
-
 ||| Extracts and removes the minimum-key entry of a non-empty `Box c k`.
 public export
-deleteMinBoxNode : Box c k -> Maybe (k, c, Box c k)
-deleteMinBoxNode BoxLeaf = Nothing
-deleteMinBoxNode (BoxNode _ BoxLeaf x c r) = Just (x, c, r)
-deleteMinBoxNode (BoxNode _ l x c r) =
-  case deleteMinBoxNode l of
+extractMinBox : Box c k -> Maybe (k, c, Box c k)
+extractMinBox BoxLeaf = Nothing
+extractMinBox (BoxNode _ BoxLeaf x c r) = Just (x, c, r)
+extractMinBox (BoxNode _ l x c r) =
+  case extractMinBox l of
     Nothing => Just (x, c, r)
     Just (minK, minW, l') => Just (minK, minW, balanceBoxNode l' x c r)
-
-||| Alias for `deleteMinBoxNode`.
-public export
-extractMinBox : Box c k -> Maybe (k, c, Box c k)
-extractMinBox = deleteMinBoxNode
 
 ||| Deletes the root entry given left and right subtrees, rebalancing in O(log N).
 public export
@@ -117,7 +93,7 @@ deleteRootBoxNode : Box c k -> k -> Box c k -> Box c k
 deleteRootBoxNode BoxLeaf _ r = r
 deleteRootBoxNode l       _ BoxLeaf = l
 deleteRootBoxNode l       _ r =
-  case deleteMinBoxNode r of
+  case extractMinBox r of
     Nothing => l
     Just (minK, minW, r') => balanceBoxNode l minK minW r'
 
@@ -195,45 +171,6 @@ public export
 singletonBox : MultisetWeight c => k -> c -> Box c k
 singletonBox k w = if isZero w then BoxLeaf else BoxNode 1 BoxLeaf k w BoxLeaf
 
-||| Constructs a balanced AVL `Box` from 1 key-weight pair in O(1) without `Ord`.
-public export
-mkSortedBox1 : MultisetWeight c => k -> c -> Box c k
-mkSortedBox1 = singletonBox
-
-||| Constructs a balanced AVL `Box` from 2 strictly ascending keys in O(1) without `Ord`.
-public export
-mkSortedBox2 : MultisetWeight c => k -> c -> k -> c -> Box c k
-mkSortedBox2 k0 w0 k1 w1 =
-  if isZero w0 then mkSortedBox1 k1 w1
-  else if isZero w1 then BoxNode 1 BoxLeaf k0 w0 BoxLeaf
-  else BoxNode 2 (BoxNode 1 BoxLeaf k0 w0 BoxLeaf) k1 w1 BoxLeaf
-
-||| Constructs a balanced AVL `Box` from 3 strictly ascending keys in O(1) without `Ord`.
-public export
-mkSortedBox3 : MultisetWeight c => k -> c -> k -> c -> k -> c -> Box c k
-mkSortedBox3 k0 w0 k1 w1 k2 w2 =
-  if isZero w0 then mkSortedBox2 k1 w1 k2 w2
-  else if isZero w1 then mkSortedBox2 k0 w0 k2 w2
-  else if isZero w2 then BoxNode 2 (BoxNode 1 BoxLeaf k0 w0 BoxLeaf) k1 w1 BoxLeaf
-  else BoxNode 2 (BoxNode 1 BoxLeaf k0 w0 BoxLeaf) k1 w1 (BoxNode 1 BoxLeaf k2 w2 BoxLeaf)
-
-||| Constructs a balanced AVL `Box` from 4 strictly ascending keys in O(1) without `Ord`.
-public export
-mkSortedBox4 : MultisetWeight c => k -> c -> k -> c -> k -> c -> k -> c -> Box c k
-mkSortedBox4 k0 w0 k1 w1 k2 w2 k3 w3 =
-  if isZero w0 then mkSortedBox3 k1 w1 k2 w2 k3 w3
-  else if isZero w1 then mkSortedBox3 k0 w0 k2 w2 k3 w3
-  else if isZero w2 then mkSortedBox3 k0 w0 k1 w1 k3 w3
-  else if isZero w3 then mkSortedBox3 k0 w0 k1 w1 k2 w2
-  else BoxNode 3 (BoxNode 1 BoxLeaf k0 w0 BoxLeaf) k1 w1 (BoxNode 2 BoxLeaf k2 w2 (BoxNode 1 BoxLeaf k3 w3 BoxLeaf))
-
-||| Constructs a balanced AVL `Box c k` from an association list of `(key, weight)` pairs,
-||| consolidating duplicates and pruning zeros.
-public export
-MkBox : (Ord k, MultisetWeight c) => List (k, c) -> Box c k
-MkBox [] = BoxLeaf
-MkBox ((k, w) :: rest) = addAtKeyBox k w (MkBox rest)
-
 ||| In-order left fold `(k -> c -> acc -> acc)` over `Box c k`.
 public export
 foldBox : (k -> c -> acc -> acc) -> acc -> Box c k -> acc
@@ -242,15 +179,6 @@ foldBox f acc (BoxNode _ l k w r) =
   let accL = foldBox f acc l
       accM = f k w accL
   in foldBox f accM r
-
-||| In-order left fold taking `(b -> (k, c) -> b)`.
-public export
-foldBoxTreeL : (f : b -> (k, c) -> b) -> b -> Box c k -> b
-foldBoxTreeL _ acc BoxLeaf = acc
-foldBoxTreeL f acc (BoxNode _ l k w r) =
-  let accL    = foldBoxTreeL f acc l
-      accNode = f accL (k, w)
-  in foldBoxTreeL f accNode r
 
 ||| Structurally recursive in-order right fold `(k -> c -> b -> b)` over `Box c k`.
 public export
@@ -314,13 +242,6 @@ popNextNonZeroZipper (S fuel) stk =
       let nextStk = pushLeftBox r rest
       in if isZero w then popNextNonZeroZipper fuel nextStk else Just (k, w, nextStk)
 
-||| Counts active non-zero entries directly over `Box c k` without `List` allocation.
-public export
-countNonZeroBox : MultisetWeight c => Box c k -> Nat
-countNonZeroBox BoxLeaf             = Z
-countNonZeroBox (BoxNode _ l _ w r) =
-  countNonZeroBox l + (if isZero w then 0 else 1) + countNonZeroBox r
-
 ||| Fueled left-spine comparison on non-zero entries of two `Box c k` trees.
 public export
 compareBoxZipperFuel : (Ord k, MultisetWeight c) =>
@@ -373,11 +294,6 @@ Foldable (Box c) where
 ------------------------------------------------------------------------
 -- 6. POINTWISE ALGEBRAIC, RELATIONAL & PAIRWISE PRODUCT OPERATORS
 ------------------------------------------------------------------------
-
-||| Re-consolidates a `Box c k` by pruning any zero weights and balancing.
-public export
-consolidateBox : (Ord k, MultisetWeight c) => Box c k -> Box c k
-consolidateBox t = foldBox (\k, w, acc => if isZero w then acc else setBox k w acc) BoxLeaf t
 
 ||| Pointwise negation of all weights in a `Box c k`.
 public export
@@ -584,14 +500,6 @@ mkAntisymEdge a b w =
   if a == b || isZero w
     then BoxLeaf
     else setBox (b, a) (negWeight w) (singletonBox (a, b) w)
-
-||| Updates an antisymmetric edge pair `(a, b) -> +w` and `(b, a) -> -w` canonically.
-public export
-setAntisymEdge : (Ord k, MultisetWeight c) => k -> k -> c -> Box c (k, k) -> Box c (k, k)
-setAntisymEdge a b w m =
-  if a == b
-    then m
-    else setBox (b, a) (negWeight w) (setBox (a, b) w m)
 
 ||| Decides whether a square 2D `Box c (k, k)` is antisymmetric (`transposeBox m == negateBox m`).
 public export
@@ -933,17 +841,6 @@ shiftConvolveMaxel {form} shiftAdd (MkMaxel m) shiftBox =
                                outer shiftBox)
                     BoxLeaf m
 
-||| Sparse N-axis balanced unit-shift multiset `[+d_1, -d_1, ..., +d_n, -d_n]` given a coordinate negator.
-public export
-unitAxesWith : (Ord k, MultisetWeight c) => (negShift : k -> k) -> List k -> Box c k
-unitAxesWith negShift =
-  foldl (\acc, d => addAtKeyBox (negShift d) oneWeight (addAtKeyBox d oneWeight acc)) BoxLeaf
-
-||| Sparse N-axis balanced unit-shift multiset `[+d_1, -d_1, ..., +d_n, -d_n]` over any `GroupCoord k`.
-public export
-unitAxes : (GroupCoord k, MultisetWeight c) => List k -> Box c k
-unitAxes = unitAxesWith inverse
-
 ||| Sparse 2-axis balanced unit-shift multiset `[+dx, -dx, +dy, -dy]` given a coordinate negator.
 public export
 unitAxes2DWith : (Ord k, MultisetWeight c) => (negShift : k -> k) -> (dx, dy : k) -> Box c k
@@ -1072,11 +969,11 @@ public export
 MonoidCoord k => Num (Box BoxInt k) where
   (+) = unionBox
   (*) = mulBoxWith
-  fromInteger n = singletonBox origin (intToBoxInt n)
+  fromInteger n = singletonBox origin (MkBoxInt n)
 
 public export
 MonoidCoord k => Neg (Box BoxInt k) where
-  negate = scaleBox (intToBoxInt (-1))
+  negate = scaleBox (MkBoxInt (-1))
   (-) = subBox
 
 public export
@@ -1137,23 +1034,10 @@ decideBoolTrue True  = Yes Refl
 decideBoolTrue False = No (\case Refl impossible)
 
 ||| Total, terminating constructive `Dec` recognizer validating external or dynamic
-||| `Box c k` carriers before entry into `MultisetExpr` / `StepKernel`.
+||| `Box c k` carriers.
 public export
 recognizeCanonicalBox : MultisetWeight c => Ord k => (b : Box c k) -> Dec (IsCanonicalBox b)
 recognizeCanonicalBox b = decideBoolTrue (isCanonicalBox b)
-
-||| Erased-proof `Subset` bundling a `Box c k` with its canonical invariant witness.
-public export
-CanonicalBox : (c : Type) -> (k : Type) -> (MultisetWeight c, Ord k) => Type
-CanonicalBox c k = Subset (Box c k) IsCanonicalBox
-
-||| Smart constructor packing a verified `Box c k` into `CanonicalBox c k`.
-public export
-toCanonicalBox : (MultisetWeight c, Ord k) => (b : Box c k) -> Maybe (CanonicalBox c k)
-toCanonicalBox b =
-  case recognizeCanonicalBox b of
-    Yes prf => Just (Element b prf)
-    No _    => Nothing
 
 ||| Splits a signed `Box c k` into disjoint positive (`M_+`) and negative (`M_-`) channels,
 ||| with positive weights in each channel: `posBox` has entries with `w > 0`, `negBox` has `-w` for `w < 0`.

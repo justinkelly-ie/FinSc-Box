@@ -76,8 +76,8 @@ interface Ord c => MultisetWeight c where
 
 public export
 MultisetWeight BoxInt where
-  zeroWeight = intToBoxInt 0
-  oneWeight  = intToBoxInt 1
+  zeroWeight = MkBoxInt 0
+  oneWeight  = MkBoxInt 1
   isZero     = boxIsZero
   addWeight  = addBox
   negWeight  = negBox
@@ -90,16 +90,11 @@ public export
 interface MultisetWeight c => QuantumCarrier c where
   peelQuantum : c -> Maybe (Either c c)
 
-||| Alias for quantum-peelable multiplicity weights.
-public export
-QuantumMultiplicity : Type -> Type
-QuantumMultiplicity = QuantumCarrier
-
 public export
 QuantumCarrier BoxInt where
   peelQuantum (MkBoxInt w) =
-    if w > 0 then Just (Left (intToBoxInt (w - 1)))
-    else if w < 0 then Just (Right (intToBoxInt (w + 1)))
+    if w > 0 then Just (Left (MkBoxInt (w - 1)))
+    else if w < 0 then Just (Right (MkBoxInt (w + 1)))
     else Nothing
 
 ||| Unified core multiset algebra shared by `Box c k`, `HereditaryMSet c`,
@@ -318,9 +313,9 @@ GroupCoord SignedCoord where
 
 public export
 signedToBoxInt : SignedCoord -> BoxInt
-signedToBoxInt ZeroZ    = intToBoxInt 0
-signedToBoxInt (PosZ k) = intToBoxInt (natToInteger (S k))
-signedToBoxInt (NegZ k) = intToBoxInt (negate (natToInteger (S k)))
+signedToBoxInt ZeroZ    = MkBoxInt 0
+signedToBoxInt (PosZ k) = MkBoxInt (natToInteger (S k))
+signedToBoxInt (NegZ k) = MkBoxInt (negate (natToInteger (S k)))
 
 public export
 boxIntToSigned : BoxInt -> SignedCoord

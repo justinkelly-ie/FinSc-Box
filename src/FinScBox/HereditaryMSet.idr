@@ -1,6 +1,7 @@
 module FinScBox.HereditaryMSet
 
 import Data.Nat
+import public Data.DPair
 import public Data.Maybe
 import public Decidable.Equality
 import public FinScBox.Box
@@ -27,19 +28,15 @@ public export
 emptyHMSet : HereditaryMSet c
 emptyHMSet = MkHMSet BoxLeaf
 
-public export
-emptyPureMSet : PureMultiset
-emptyPureMSet = emptyHMSet
-
 ||| Canonical signed scalar Laurent key `alpha^k` inside `PureMultiset`:
 ||| - `0` -> `emptyHMSet` (`[]`)
-||| - `k` -> `{ [] -> k }` (`MkHMSet (setBox emptyHMSet (intToBoxInt k) BoxLeaf)`)
+||| - `k` -> `{ [] -> k }` (`MkHMSet (singletonBox emptyHMSet (MkBoxInt k))`)
 public export
 scalarKeyHMSet : Integer -> PureMultiset
 scalarKeyHMSet k =
   if k == 0
     then emptyHMSet
-    else MkHMSet (singletonBox emptyHMSet (intToBoxInt k))
+    else MkHMSet (singletonBox emptyHMSet (MkBoxInt k))
 
 ------------------------------------------------------------------------
 -- 2. TOTAL STRUCTURAL EQUALITY, BOUNDED-ZIPPER ORDERING & SHOW
@@ -115,11 +112,6 @@ MultisetWeight c => Ord (HereditaryMSet c) where
 public export
 lookupKeyHMSet : MultisetWeight c => HereditaryMSet c -> HereditaryMSet c -> c
 lookupKeyHMSet k (MkHMSet b) = lookupBox k b
-
-||| Specialised lookup of key `k` in `PureMultiset` returning exact signed `BoxInt`.
-public export
-lookupPureKey : PureMultiset -> PureMultiset -> BoxInt
-lookupPureKey = lookupKeyHMSet
 
 ||| Observes the scalar multiplicity at the origin key 0 (\alpha^0).
 public export
@@ -265,8 +257,8 @@ Num PureMultiset where
   (+) = addHMSet
   (*) = mulHMSet
   fromInteger n =
-    let w = intToBoxInt n
-    in if boxIsZero w then emptyPureMSet else MkHMSet (setBox emptyPureMSet w BoxLeaf)
+    let w = MkBoxInt n
+    in if boxIsZero w then emptyHMSet else MkHMSet (setBox emptyHMSet w BoxLeaf)
 
 public export
 Neg PureMultiset where
@@ -283,7 +275,7 @@ Neg PureMultiset where
 ||| is natively a `PureMultiset` with zero extra types.
 public export
 polyX : PureMultiset
-polyX = MkHMSet (singletonBox (scalarKeyHMSet 1) (intToBoxInt 1))
+polyX = MkHMSet (singletonBox (scalarKeyHMSet 1) (MkBoxInt 1))
 
 ||| Cigler-Herbig irreducible spread polynomial factors `Psi_1(x) .. Psi_10(x), Psi_12(x)` natively in `PureMultiset`:
 ||| - `Psi_1(x)  = x` (deg 1 = phi(1), root at `x = 0`)
@@ -379,7 +371,7 @@ stepSpreadZHMSet zn zn1 zn2 =
 
 public export
 spreadZHMSet : Nat -> PureMultiset
-spreadZHMSet Z               = emptyPureMSet
+spreadZHMSet Z               = emptyHMSet
 spreadZHMSet (S Z)           = polyX
 spreadZHMSet (S (S Z))       = 4 * polyX - polyX * polyX
 spreadZHMSet (S (S (S Z)))   = 9 * polyX - 6 * polyX * polyX + polyX * polyX * polyX
@@ -482,15 +474,15 @@ toCanonicalHMSet m =
 public export
 halfStepBackward : HereditaryMSet BoxInt
 halfStepBackward =
-  MkHMSet $ setBox (scalarKeyHMSet (-1)) (intToBoxInt 1)
-          ( setBox (scalarKeyHMSet 0)    (intToBoxInt 1) BoxLeaf )
+  MkHMSet $ setBox (scalarKeyHMSet (-1)) (MkBoxInt 1)
+          ( setBox (scalarKeyHMSet 0)    (MkBoxInt 1) BoxLeaf )
 
 ||| Forward-or-stay half-step dipole (`alpha^(+1) + 1`) as a `PureMultiset`.
 public export
 halfStepForward : HereditaryMSet BoxInt
 halfStepForward =
-  MkHMSet $ setBox (scalarKeyHMSet 0) (intToBoxInt 1)
-          ( setBox (scalarKeyHMSet 1) (intToBoxInt 1) BoxLeaf )
+  MkHMSet $ setBox (scalarKeyHMSet 0) (MkBoxInt 1)
+          ( setBox (scalarKeyHMSet 1) (MkBoxInt 1) BoxLeaf )
 
 ||| Full symmetric motion tick (`(alpha^(-1) + 1) * (alpha^(+1) + 1) = alpha^(-1) + 2*alpha^0 + alpha^(+1)`).
 public export
@@ -557,11 +549,6 @@ Eq (GohFuel cap) where
 public export
 Show (GohFuel cap) where
   show (MkGohFuel s) = "GohFuel(" ++ show s ++ " steps)"
-
-||| Canonical smart constructor generating exact fuel from capacity.
-public export
-gohFuelForCapacity : (capacity : Nat) -> GohFuel capacity
-gohFuelForCapacity cap = MkGohFuel (gohFuelNat cap)
 
 ||| Zero-cost projection to raw steps for loop pattern-matching (`Z` and `S f`).
 public export

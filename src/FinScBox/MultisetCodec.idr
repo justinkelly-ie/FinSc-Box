@@ -1,5 +1,6 @@
 module FinScBox.MultisetCodec
 
+import Data.DPair
 import Data.List
 import Data.Nat
 import Decidable.Equality
@@ -123,7 +124,7 @@ parseBracketWeight fuel ('[' :: cs) =
   case parseSignedInteger fuel (skipSpaces cs) of
     Just (v, rest1) =>
       case skipSpaces rest1 of
-        (']' :: rest2) => Just (intToBoxInt v, rest2)
+        (']' :: rest2) => Just (MkBoxInt v, rest2)
         _               => Nothing
     Nothing => Nothing
 parseBracketWeight _ _ = Nothing
@@ -159,12 +160,12 @@ mutual
     case skipSpaces cs of
       ('[' :: rest) =>
         case skipSpaces rest of
-          (']' :: more) => Just (emptyPureMSet, more)
+          (']' :: more) => Just (emptyHMSet, more)
           _             => Nothing
       ('{' :: rest) =>
         case skipSpaces rest of
-          ('}' :: more) => Just (emptyPureMSet, more)
-          other         => parseEntriesFuel fuel emptyPureMSet other
+          ('}' :: more) => Just (emptyHMSet, more)
+          other         => parseEntriesFuel fuel emptyHMSet other
       _ => Nothing
 
 ||| Parses canonical `Show` / `renderPureMultiset` text into a `PureMultiset`.
@@ -214,14 +215,14 @@ decodeCanonicalMultiset s =
 
 public export
 0 prfRenderEmpty :
-  FinScBox.MultisetCodec.renderPureMultiset FinScBox.HereditaryMSet.emptyPureMSet = "[]"
+  FinScBox.MultisetCodec.renderPureMultiset FinScBox.HereditaryMSet.emptyHMSet = "[]"
 prfRenderEmpty = Refl
 
 public export
 0 prfCodecRoundTripVacuum :
   (case FinScBox.MultisetCodec.parsePureMultiset
-          (FinScBox.MultisetCodec.renderPureMultiset FinScBox.HereditaryMSet.emptyPureMSet) of
-     Just m  => m == FinScBox.HereditaryMSet.emptyPureMSet
+          (FinScBox.MultisetCodec.renderPureMultiset FinScBox.HereditaryMSet.emptyHMSet) of
+     Just m  => m == FinScBox.HereditaryMSet.emptyHMSet
      Nothing => False) = True
 prfCodecRoundTripVacuum = Refl
 

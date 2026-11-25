@@ -21,7 +21,7 @@ data AntiBoxView : (c : Type) -> Type where
   PopRedBox   : (term : HereditaryMSet c) -> (rest : HereditaryMSet c) -> AntiBoxView c
 
 public export
-antiBoxLoop : QuantumMultiplicity c => Nat -> HereditaryMSet c -> AntiBoxView c
+antiBoxLoop : QuantumCarrier c => Nat -> HereditaryMSet c -> AntiBoxView c
 antiBoxLoop Z _ = EmptyVacuum
 antiBoxLoop (S rem) (MkHMSet BoxLeaf) = EmptyVacuum
 antiBoxLoop (S rem) (MkHMSet tree@(BoxNode _ _ _ _ _)) =
@@ -39,7 +39,7 @@ antiBoxLoop (S rem) (MkHMSet tree@(BoxNode _ _ _ _ _)) =
 
 ||| Total covering function peeling one `+1` Black or `-1` Red quantum from the minimum key.
 public export
-viewAsAntiBox : QuantumMultiplicity c => HereditaryMSet c -> AntiBoxView c
+viewAsAntiBox : QuantumCarrier c => HereditaryMSet c -> AntiBoxView c
 viewAsAntiBox m@(MkHMSet tree) = antiBoxLoop (S (boxNodeCount tree)) m
 
 ------------------------------------------------------------------------
