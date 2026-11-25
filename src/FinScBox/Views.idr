@@ -102,10 +102,10 @@ Show StreamWorkReport where
     ", L1=" ++ show w.residualL1 ++ ")"
 
 mutual
-  ||| Peels every outer quantum of a `HereditaryMSet BoxInt` via `viewAsAntiBox`,
+  ||| Peels every outer quantum of a `HereditaryMSet c` via `viewAsAntiBox`,
   ||| recursively charging nested key peels so `zoomSpace (blackShift k)` increases stream work.
   public export
-  peelQuantaWorkLoop : Nat -> Nat -> HereditaryMSet BoxInt -> Nat
+  peelQuantaWorkLoop : QuantumCarrier c => Nat -> Nat -> HereditaryMSet c -> Nat
   peelQuantaWorkLoop _         Z         _ = 0
   peelQuantaWorkLoop depthFuel (S qFuel) m =
     case viewAsAntiBox m of
@@ -116,16 +116,16 @@ mutual
         S (peelNestedWork depthFuel term + peelQuantaWorkLoop depthFuel qFuel rest)
 
   public export
-  peelNestedWork : Nat -> HereditaryMSet BoxInt -> Nat
+  peelNestedWork : QuantumCarrier c => Nat -> HereditaryMSet c -> Nat
   peelNestedWork Z         _                 = 0
   peelNestedWork _         (MkHMSet BoxLeaf) = 0
   peelNestedWork (S dFuel) m@(MkHMSet b)     =
     peelQuantaWorkLoop dFuel (S (collectSupportStats b).totalMass) m
 
-||| Evaluates streaming quantum-peeling work on a `HereditaryMSet BoxInt`.
+||| Evaluates streaming quantum-peeling work on any `QuantumCarrier c => HereditaryMSet c`.
 ||| Empty vacuum `[]` requires strictly `0` work steps.
 public export
-streamPeelWorkHMSet : HereditaryMSet BoxInt -> StreamWorkReport
+streamPeelWorkHMSet : QuantumCarrier c => HereditaryMSet c -> StreamWorkReport
 streamPeelWorkHMSet (MkHMSet BoxLeaf) = MkStreamWorkReport 0 0 0
 streamPeelWorkHMSet m@(MkHMSet b) =
   let resL1 = (collectSupportStats b).totalMass
@@ -135,23 +135,24 @@ streamPeelWorkHMSet m@(MkHMSet b) =
 ||| Exact `O(tree-size)` structural peel-step counter matching `streamPeelWorkHMSet` without
 ||| unary quantum-by-quantum loops.
 public export
-fastPeelWorkLoop : Nat -> HereditaryMSet BoxInt -> Nat
+fastPeelWorkLoop : MultisetWeight c => Nat -> HereditaryMSet c -> Nat
 fastPeelWorkLoop Z _ = 0
 fastPeelWorkLoop _ (MkHMSet BoxLeaf) = 0
 fastPeelWorkLoop (S dFuel) (MkHMSet b) =
   foldBox (\k, w, acc => acc + weightMagnitude w * S (fastPeelWorkLoop dFuel k)) 0 b
 
-||| Computes the exact nested peel-work step count of any `HereditaryMSet BoxInt` in `O(nodes)`.
+||| Computes the exact nested peel-work step count of any `HereditaryMSet c` in `O(nodes)`.
 public export
-fastPeelWorkHMSet : HereditaryMSet BoxInt -> Nat
+fastPeelWorkHMSet : MultisetWeight c => HereditaryMSet c -> Nat
 fastPeelWorkHMSet m = fastPeelWorkLoop (hmDepth m) m
 
-||| Merges two `HereditaryMSet BoxInt` operands via `addHMSet`, recording
+||| Merges two `HereditaryMSet c` operands via `addHMSet`, recording
 ||| total peeling work steps and annihilated Black/Red pairs (`[+1, -1] = []`).
 public export
-streamMergeWorkHMSet : HereditaryMSet BoxInt ->
-                       HereditaryMSet BoxInt ->
-                       (HereditaryMSet BoxInt, StreamWorkReport)
+streamMergeWorkHMSet : QuantumCarrier c =>
+                       HereditaryMSet c ->
+                       HereditaryMSet c ->
+                       (HereditaryMSet c, StreamWorkReport)
 streamMergeWorkHMSet a b =
   let rA     = streamPeelWorkHMSet a
       rB     = streamPeelWorkHMSet b

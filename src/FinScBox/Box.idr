@@ -210,6 +210,18 @@ public export
 treeSizeNonZero : MultisetWeight c => Box c k -> Nat
 treeSizeNonZero = foldBox (\_, w, acc => if isZero w then acc else S acc) 0
 
+||| Short-circuiting universal predicate over all stored `(key, weight)` entries in `Box c k`.
+public export
+allBox : (k -> c -> Bool) -> Box c k -> Bool
+allBox _ BoxLeaf             = True
+allBox p (BoxNode _ l k w r) = p k w && allBox p l && allBox p r
+
+||| Maps a weight function over `Box c k` and prunes any resulting `zeroWeight` entries.
+public export
+mapPruneBox : (Ord k, MultisetWeight d) => (c -> d) -> Box c k -> Box d k
+mapPruneBox f =
+  foldBox (\k, w, acc => let w' = f w in if isZero w' then acc else setBox k w' acc) BoxLeaf
+
 ------------------------------------------------------------------------
 -- 5. BOUNDED LEFT-SPINE ZIPPER, EQUALITY & ORDERING (ZERO LIST ALLOCATION)
 ------------------------------------------------------------------------
@@ -592,6 +604,47 @@ public export
 maxelNodeCount : MultisetWeight c => Maxel c a b form -> Nat
 maxelNodeCount m = treeSizeNonZero m.rawMaxelBox
 
+||| Sums all canonically stored multiplicities in `Maxel c a b form`.
+public export
+sumStoredMaxel : MultisetWeight c => Maxel c a b form -> c
+sumStoredMaxel (MkMaxel m) = totalMassBox m
+
+||| Folds over the canonically stored `(a, b, w)` entries of `Maxel c a b form`.
+public export
+foldStoredMaxel : (a -> b -> c -> acc -> acc) -> acc -> Maxel c a b form -> acc
+foldStoredMaxel f acc (MkMaxel m) = foldBox (\(x, y), w, a => f x y w a) acc m
+
+||| Filters canonically stored entries of `Maxel c a b form` by an index-pair predicate.
+public export
+filterMaxel : (Ord a, Ord b, MultisetWeight c) => (a -> b -> Bool) -> Maxel c a b form -> Maxel c a b form
+filterMaxel p (MkMaxel m) = MkMaxel (filterBox (\(x, y) => p x y) m)
+
+||| Zeroes the coincidence diagonal `(x, x)` while preserving `form`.
+public export
+offDiagMaxel : (Ord k, MultisetWeight c) => Maxel c k k form -> Maxel c k k form
+offDiagMaxel = filterMaxel (/=)
+
+||| Maps a weight function over stored entries of `Maxel c a b form`, pruning zeros.
+public export
+mapPruneMaxel : (Ord a, Ord b, MultisetWeight d) => (c -> d) -> Maxel c a b form -> Maxel d a b form
+mapPruneMaxel f (MkMaxel m) = MkMaxel (mapPruneBox f m)
+
+||| Retains stored entries of `Maxel c a b form` whose canonical keys are active in `mask`.
+public export
+maskByMaxel : (Ord a, Ord b, MultisetWeight c, MultisetWeight d) =>
+              Maxel c a b form -> Maxel d a b form -> Maxel c a b form
+maskByMaxel (MkMaxel m) (MkMaxel mask) = MkMaxel (maskByBox m mask)
+
+||| Right index contraction summing out `b` from a `GeneralForm` Maxel.
+public export
+contractRMaxel : (Ord a, MultisetWeight c) => Maxel c a b GeneralForm -> Box c a
+contractRMaxel (MkMaxel m) = contractRBox m
+
+||| Left index contraction summing out `a` from a `GeneralForm` Maxel.
+public export
+contractLMaxel : (Ord b, MultisetWeight c) => Maxel c a b GeneralForm -> Box c b
+contractLMaxel (MkMaxel m) = contractLBox m
+
 public export
 lookupHalfBox : Ord k => MultisetWeight c => (allowDiag, antisymOff : Bool) -> k -> k -> Box c (k, k) -> c
 lookupHalfBox allowDiag antisymOff x y m =
@@ -755,6 +808,16 @@ toGeneralMaxel {form = DiagAntisymForm} (MkMaxel m) =
                          else addAtKeyBox (y, x) (negWeight w) (addAtKeyBox (x, y) w acc))
                     BoxLeaf m
 
+||| Decides whether the full square expansion of `m` is symmetric (`M^T == M`).
+public export
+isSymMaxel : (Ord k, MultisetWeight c) => {form : MaxelForm k k} -> Maxel c k k form -> Bool
+isSymMaxel m = let g = toGeneralMaxel m in transposeMaxel g == g
+
+||| Decides whether the full square expansion of `m` is antisymmetric (`M^T == -M`).
+public export
+isAntisymMaxel : (Ord k, MultisetWeight c) => {form : MaxelForm k k} -> Maxel c k k form -> Bool
+isAntisymMaxel m = let g = toGeneralMaxel m in transposeMaxel g == negateMaxel g
+
 public export
 hadamardMaxelForm : MaxelForm a b -> MaxelForm a b -> MaxelForm a b
 hadamardMaxelForm GeneralForm     _               = GeneralForm
@@ -861,10 +924,7 @@ pruneMinBox : Ord k => Integer -> Box BoxInt k -> Box BoxInt k
 pruneMinBox minCut b =
   if minCut <= 1
     then b
-    else foldBox (\k, w@(MkBoxInt v), acc =>
-                    let mag = if v < 0 then -v else v
-                    in if mag >= minCut then setBox k w acc else acc)
-                 BoxLeaf b
+    else mapPruneBox (\w@(MkBoxInt v) => if abs v >= minCut then w else zeroWeight) b
 
 ||| Divides all entries of a `Box BoxInt k` symmetrically by `den` and prunes values below `minCut`.
 public export
@@ -872,11 +932,8 @@ scaleDivPruneBox : Ord k => (den, minCut : Integer) -> Box BoxInt k -> Box BoxIn
 scaleDivPruneBox den minCut b =
   if den <= 0
     then BoxLeaf
-    else foldBox (\k, w, acc =>
-                    let q@(MkBoxInt qv) = tdivPosBox w den
-                        mag            = if qv < 0 then -qv else qv
-                    in if mag >= minCut && qv /= 0 then setBox k q acc else acc)
-                 BoxLeaf b
+    else mapPruneBox (\w => let q@(MkBoxInt qv) = tdivPosBox w den
+                            in if abs qv >= minCut then q else zeroWeight) b
 
 public export
 pruneMinMaxel : (Ord a, Ord b) => Integer -> Maxel BoxInt a b form -> Maxel BoxInt a b form

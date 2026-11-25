@@ -97,6 +97,106 @@ QuantumCarrier BoxInt where
     else if w < 0 then Just (Right (MkBoxInt (w + 1)))
     else Nothing
 
+||| Balanced ternary polarity multiplicity (`[] = [+1, -1]`, `PosBit + NegBit = ZeroBit`),
+||| ordered `NegBit < ZeroBit < PosBit` to match signed `BoxInt` channel splitting.
+public export
+data SignedBit : Type where
+  ZeroBit : SignedBit
+  PosBit  : SignedBit
+  NegBit  : SignedBit
+
+public export
+Eq SignedBit where
+  ZeroBit == ZeroBit = True
+  PosBit  == PosBit  = True
+  NegBit  == NegBit  = True
+  _       == _       = False
+
+public export
+Ord SignedBit where
+  compare NegBit  NegBit  = EQ
+  compare NegBit  _       = LT
+  compare _       NegBit  = GT
+  compare ZeroBit ZeroBit = EQ
+  compare ZeroBit PosBit  = LT
+  compare PosBit  ZeroBit = GT
+  compare PosBit  PosBit  = EQ
+
+public export
+Show SignedBit where
+  show ZeroBit = "[0]"
+  show PosBit  = "[+1]"
+  show NegBit  = "[-1]"
+
+public export
+MultisetWeight SignedBit where
+  zeroWeight = ZeroBit
+  oneWeight  = PosBit
+  isZero ZeroBit = True
+  isZero _       = False
+  addWeight ZeroBit b       = b
+  addWeight a       ZeroBit = a
+  addWeight PosBit  NegBit  = ZeroBit
+  addWeight NegBit  PosBit  = ZeroBit
+  addWeight PosBit  PosBit  = PosBit
+  addWeight NegBit  NegBit  = NegBit
+  negWeight ZeroBit = ZeroBit
+  negWeight PosBit  = NegBit
+  negWeight NegBit  = PosBit
+  mulWeight ZeroBit _       = ZeroBit
+  mulWeight _       ZeroBit = ZeroBit
+  mulWeight PosBit  b       = b
+  mulWeight a       PosBit  = a
+  mulWeight NegBit  NegBit  = PosBit
+
+public export
+QuantumCarrier SignedBit where
+  peelQuantum ZeroBit = Nothing
+  peelQuantum PosBit  = Just (Left ZeroBit)
+  peelQuantum NegBit  = Just (Right ZeroBit)
+
+||| Unsigned support / Z_2 parity multiplicity (`OneBit + OneBit = EmptyBit`).
+public export
+data MultisetBit : Type where
+  EmptyBit : MultisetBit
+  OneBit   : MultisetBit
+
+public export
+Eq MultisetBit where
+  EmptyBit == EmptyBit = True
+  OneBit   == OneBit   = True
+  _        == _        = False
+
+public export
+Ord MultisetBit where
+  compare EmptyBit EmptyBit = EQ
+  compare EmptyBit OneBit   = LT
+  compare OneBit   EmptyBit = GT
+  compare OneBit   OneBit   = EQ
+
+public export
+Show MultisetBit where
+  show EmptyBit = "[0]"
+  show OneBit   = "[1]"
+
+public export
+MultisetWeight MultisetBit where
+  zeroWeight = EmptyBit
+  oneWeight  = OneBit
+  isZero EmptyBit = True
+  isZero OneBit   = False
+  addWeight EmptyBit b        = b
+  addWeight a        EmptyBit = a
+  addWeight OneBit   OneBit   = EmptyBit
+  negWeight b = b
+  mulWeight OneBit OneBit = OneBit
+  mulWeight _      _      = EmptyBit
+
+public export
+QuantumCarrier MultisetBit where
+  peelQuantum EmptyBit = Nothing
+  peelQuantum OneBit   = Just (Left EmptyBit)
+
 ||| Unified core multiset algebra shared by `Box c k`, `HereditaryMSet c`,
 ||| and `Maxel c a b form`: additive group (`0`, `+`, `neg`, `-`), scalar
 ||| scaling, and bilinear inner product (`<.>`).

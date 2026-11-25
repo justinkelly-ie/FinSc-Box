@@ -97,40 +97,65 @@ pythChoosePair sSum dDiff numD numU rDen eOld =
                        then (dC, uR)
                        else pythFallbackPair sSum dDiff numD numU rDen
 
+||| Parametric integer Pythagorean / Gaussian triple `(qtA, qtB, qtR)` (`qtA^2 + qtB^2 = qtR^2`),
+||| forming a commutative `Monoid` under Gaussian composition with neutral `(1, 0, 1)`.
+public export
+record QuadraticTriple where
+  constructor MkQuadraticTriple
+  qtA : Integer
+  qtB : Integer
+  qtR : Integer
+
+public export
+Eq QuadraticTriple where
+  x == y = x.qtA == y.qtA && x.qtB == y.qtB && x.qtR == y.qtR
+
+public export
+Show QuadraticTriple where
+  show t = "QuadraticTriple(" ++ show t.qtA ++ ", " ++ show t.qtB ++ ", " ++ show t.qtR ++ ")"
+
 ||| Generates the elementary Pythagorean triple `(m^2 - 1, 2m, m^2 + 1)` for `m >= 2`.
 public export
-pythGeneratorTriple : BoxInt -> (Integer, Integer, Integer)
+pythGeneratorTriple : BoxInt -> QuadraticTriple
 pythGeneratorTriple (MkBoxInt mIn) =
   let mVal = if mIn < 2 then 2 else mIn
       m2   = mVal * mVal
-  in (m2 - 1, 2 * mVal, m2 + 1)
+  in MkQuadraticTriple (m2 - 1) (2 * mVal) (m2 + 1)
 
 ||| Exact Gaussian composition `(a1 + i b1) * (a2 + i b2)` of two Pythagorean triples,
 ||| preserving `A^2 + B^2 = R^2` and multiplying rational spreads via spread polynomial composition.
 public export
-pythComposeTriple : (Integer, Integer, Integer) -> (Integer, Integer, Integer) -> (Integer, Integer, Integer)
-pythComposeTriple (a1, b1, r1) (a2, b2, r2) =
-  (a1 * a2 - b1 * b2, a1 * b2 + b1 * a2, r1 * r2)
+pythComposeTriple : QuadraticTriple -> QuadraticTriple -> QuadraticTriple
+pythComposeTriple (MkQuadraticTriple a1 b1 r1) (MkQuadraticTriple a2 b2 r2) =
+  MkQuadraticTriple (a1 * a2 - b1 * b2) (a1 * b2 + b1 * a2) (r1 * r2)
+
+public export
+Semigroup QuadraticTriple where
+  (<+>) = pythComposeTriple
+
+public export
+Monoid QuadraticTriple where
+  neutral = MkQuadraticTriple 1 0 1
 
 ||| Computes the `y`-th composite Pythagorean triple `(A_y, B_y, R_y) = (A_1 + i B_1)^y`
 ||| whose spread is the exact `y`-fold spread polynomial `S_y(s(m)) = Z_y(4 s(m)) / 4`.
 public export
-pythPowerTriple : (y : Nat) -> (m : BoxInt) -> (Integer, Integer, Integer)
-pythPowerTriple Z           _ = (1, 0, 1)
+pythPowerTriple : (y : Nat) -> (m : BoxInt) -> QuadraticTriple
+pythPowerTriple Z           _ = neutral
 pythPowerTriple (S Z)       m = pythGeneratorTriple m
 pythPowerTriple (S (S rem)) m =
   let base = pythGeneratorTriple m
   in go rem base base
   where
-    go : Nat -> (Integer, Integer, Integer) -> (Integer, Integer, Integer) -> (Integer, Integer, Integer)
-    go Z     step acc = pythComposeTriple acc step
-    go (S k) step acc = go k step (pythComposeTriple acc step)
+    go : Nat -> QuadraticTriple -> QuadraticTriple -> QuadraticTriple
+    go Z     step acc = acc <+> step
+    go (S k) step acc = go k step (acc <+> step)
 
-||| Applies a local 2-body integer quadratic exchange specified by `(aCoef, bCoef, rDen)` (`a^2 + b^2 = r^2`)
+||| Applies a local 2-body integer quadratic exchange specified by `MkQuadraticTriple aCoef bCoef rDen` (`a^2 + b^2 = r^2`)
 ||| to `(pA, pB, u)`, preserving `pA + pB` identically and monotonically bounding `2*(pA^2 + pB^2) + u^2`.
 public export
-exchangeQuadraticTriple : (Integer, Integer, Integer) -> (pA, pB, u : BoxInt) -> QuadraticPairResult
-exchangeQuadraticTriple (aCoef, bCoef, rDen) pA pB u =
+exchangeQuadraticTriple : QuadraticTriple -> (pA, pB, u : BoxInt) -> QuadraticPairResult
+exchangeQuadraticTriple (MkQuadraticTriple aCoef bCoef rDen) pA pB u =
   let dDiff = subBox pB pA
   in if (boxIsZero dDiff && boxIsZero u) || bCoef == 0 || rDen <= 0
        then MkQuadraticPairResult pA pB u

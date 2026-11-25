@@ -28,15 +28,17 @@ public export
 emptyHMSet : HereditaryMSet c
 emptyHMSet = MkHMSet BoxLeaf
 
+||| Constructs a zero-pruned singleton `HereditaryMSet c` (`{ k : w }`, or `[]` when `isZero w`).
+public export
+singletonHMSet : MultisetWeight c => HereditaryMSet c -> c -> HereditaryMSet c
+singletonHMSet k w = MkHMSet (singletonBox k w)
+
 ||| Canonical signed scalar Laurent key `alpha^k` inside `PureMultiset`:
 ||| - `0` -> `emptyHMSet` (`[]`)
-||| - `k` -> `{ [] -> k }` (`MkHMSet (singletonBox emptyHMSet (MkBoxInt k))`)
+||| - `k` -> `{ [] -> k }` (`singletonHMSet emptyHMSet (MkBoxInt k)`)
 public export
 scalarKeyHMSet : Integer -> PureMultiset
-scalarKeyHMSet k =
-  if k == 0
-    then emptyHMSet
-    else MkHMSet (singletonBox emptyHMSet (MkBoxInt k))
+scalarKeyHMSet k = singletonHMSet emptyHMSet (MkBoxInt k)
 
 ------------------------------------------------------------------------
 -- 2. TOTAL STRUCTURAL EQUALITY, BOUNDED-ZIPPER ORDERING & SHOW
@@ -180,6 +182,17 @@ flattenHMSetBox : MultisetWeight c => Box c (HereditaryMSet c) -> HereditaryMSet
 flattenHMSetBox =
   foldBox (\k, w, acc => addHMSet acc (scaleHMSet w k)) emptyHMSet
 
+||| Wraps a `HereditaryMSet c` one hereditary bracket deeper: `M -> { M : oneWeight }`.
+public export
+wrapBox : MultisetWeight c => HereditaryMSet c -> HereditaryMSet c
+wrapBox m = singletonHMSet m oneWeight
+
+||| Contracts one hereditary bracket level: `{ k_i : w_i } -> \sum w_i * k_i`.
+||| Exact left-inverse of `wrapBox`: `unwrapBoxLevel (wrapBox m) == m` for all `m`.
+public export
+unwrapBoxLevel : MultisetWeight c => HereditaryMSet c -> HereditaryMSet c
+unwrapBoxLevel (MkHMSet b) = flattenHMSetBox b
+
 ||| Pairwise box convolution parameterized by an inner key-combining operation.
 public export
 convolveWith : MultisetWeight c =>
@@ -218,9 +231,9 @@ outerHMSet (MkHMSet b1) (MkHMSet b2) =
       one = oneWeight {c}
       pairKey : HereditaryMSet c -> HereditaryMSet c -> HereditaryMSet c
       pairKey a b =
-        let sa  = MkHMSet (setBox a one BoxLeaf)
-            sab = MkHMSet (setBox b one (setBox a one BoxLeaf))
-        in MkHMSet (setBox sab one (setBox sa one BoxLeaf))
+        let sa  = wrapBox a
+            sab = MkHMSet (setBox b one (singletonBox a one))
+        in MkHMSet (setBox sab one (singletonBox sa one))
   in MkHMSet (pairBoxWith pairKey b1 b2)
 
 ------------------------------------------------------------------------
@@ -256,9 +269,7 @@ public export
 Num PureMultiset where
   (+) = addHMSet
   (*) = mulHMSet
-  fromInteger n =
-    let w = MkBoxInt n
-    in if boxIsZero w then emptyHMSet else MkHMSet (setBox emptyHMSet w BoxLeaf)
+  fromInteger n = singletonHMSet emptyHMSet (MkBoxInt n)
 
 public export
 Neg PureMultiset where
@@ -275,7 +286,7 @@ Neg PureMultiset where
 ||| is natively a `PureMultiset` with zero extra types.
 public export
 polyX : PureMultiset
-polyX = MkHMSet (singletonBox (scalarKeyHMSet 1) (MkBoxInt 1))
+polyX = wrapBox (scalarKeyHMSet 1)
 
 ||| Cigler-Herbig irreducible spread polynomial factors `Psi_1(x) .. Psi_10(x), Psi_12(x)` natively in `PureMultiset`:
 ||| - `Psi_1(x)  = x` (deg 1 = phi(1), root at `x = 0`)
@@ -411,17 +422,23 @@ evalHomogPolyHMSet deg (MkHMSet b) num den =
           b
 
 
-||| Recursive unit-weight support projection of a `HereditaryMSet c`:
-||| strips all multiplicities and signs down to `oneWeight` at every hereditary level via `supportBox`.
+||| Recursive unit-weight support projection between any two multiplicity carriers `c -> d`:
+||| strips all multiplicities and signs down to `oneWeight {c=d}` at every hereditary level.
 public export
-MSetSupportLoop : MultisetWeight c => Nat -> HereditaryMSet c -> HereditaryMSet c
-MSetSupportLoop Z _ = emptyHMSet
-MSetSupportLoop (S rem) (MkHMSet b) =
-  MkHMSet (foldBox (\k, _, acc => setBox (MSetSupportLoop rem k) oneWeight acc) BoxLeaf (supportBox b))
+castSupportLoop : (MultisetWeight c, MultisetWeight d) => Nat -> HereditaryMSet c -> HereditaryMSet d
+castSupportLoop Z _ = emptyHMSet
+castSupportLoop (S rem) (MkHMSet b) =
+  MkHMSet (foldBox (\k, w, acc =>
+                     if isZero w then acc else setBox (castSupportLoop rem k) oneWeight acc)
+                   BoxLeaf b)
+
+public export
+castSupportHMSet : (MultisetWeight c, MultisetWeight d) => HereditaryMSet c -> HereditaryMSet d
+castSupportHMSet m = castSupportLoop (hmDepth m) m
 
 public export
 MSetSupport : MultisetWeight c => HereditaryMSet c -> HereditaryMSet c
-MSetSupport m = MSetSupportLoop (hmDepth m) m
+MSetSupport = castSupportHMSet
 
 ------------------------------------------------------------------------
 -- CONSTRUCTIVIST HEREDITARY MULTISET RECOGNIZER (`recognition-rule.md`)
@@ -472,22 +489,18 @@ toCanonicalHMSet m =
 
 ||| Backward-or-stay half-step dipole (`alpha^(-1) + 1`) as a `PureMultiset`.
 public export
-halfStepBackward : HereditaryMSet BoxInt
-halfStepBackward =
-  MkHMSet $ setBox (scalarKeyHMSet (-1)) (MkBoxInt 1)
-          ( setBox (scalarKeyHMSet 0)    (MkBoxInt 1) BoxLeaf )
+halfStepBackward : PureMultiset
+halfStepBackward = wrapBox (scalarKeyHMSet (-1)) + 1
 
 ||| Forward-or-stay half-step dipole (`alpha^(+1) + 1`) as a `PureMultiset`.
 public export
-halfStepForward : HereditaryMSet BoxInt
-halfStepForward =
-  MkHMSet $ setBox (scalarKeyHMSet 0) (MkBoxInt 1)
-          ( setBox (scalarKeyHMSet 1) (MkBoxInt 1) BoxLeaf )
+halfStepForward : PureMultiset
+halfStepForward = polyX + 1
 
 ||| Full symmetric motion tick (`(alpha^(-1) + 1) * (alpha^(+1) + 1) = alpha^(-1) + 2*alpha^0 + alpha^(+1)`).
 public export
-symmetricMotionTick : HereditaryMSet BoxInt
-symmetricMotionTick = mulHMSet halfStepBackward halfStepForward
+symmetricMotionTick : PureMultiset
+symmetricMotionTick = halfStepBackward * halfStepForward
 
 ||| Fundamental binary polarity count (`2`) extracted directly as pure Peano `Nat`
 ||| from the two opposing non-origin poles (`-1` and `+1`) of `symmetricMotionTick`
@@ -538,9 +551,14 @@ gohFuelNat (S k) = S k + half k + boundaryBracketOverhead
 
 ||| First-class constructivist Goh Fuel indexed directly by model capacity.
 public export
-record GohFuel (capacity : Nat) where
+record GohFuel (0 capacity : Nat) where
   constructor MkGohFuel
   fuelSteps : Nat
+
+||| Constructs a direct runtime `GohFuel 0` quota without inflating compile-time phantom `capacity`.
+public export
+mkGohFuel : Nat -> GohFuel 0
+mkGohFuel s = MkGohFuel s
 
 public export
 Eq (GohFuel cap) where
@@ -753,7 +771,7 @@ Show StreamFreezeReason where
 ||| or completes at retrograde depth `g` (`RetroTime g`) and capacity `cap` (`BoundedTime cap`).
 ||| Its phantom Time index transitions to `StaticTime (- cast g) (cast cap)`.
 public export
-record SolidifiedStream (0 frozenTime : Time) (cap : Nat) (a : Type) where
+record SolidifiedStream (0 frozenTime : Time) (0 cap : Nat) (a : Type) where
   constructor MkSolidifiedStream
   relicState     : a
   freezeReason   : StreamFreezeReason
@@ -780,14 +798,14 @@ public export
 |||                       otherwise consumes `yieldCost` of `yieldFuel` and `1` `stepBudget`.
 public export
 freezeStateStreamWith :
+  {0 cap     : Nat} ->
   (g          : Nat) ->
-  (cap        : Nat) ->
   (yieldFuel  : GohFuel cap) ->
   (stepBudget : Nat) ->
   (stepFn     : a -> (StreamStep a, Nat, Nat)) ->
   (initA      : a) ->
   (SolidifiedStream (StaticTime (- cast g) (cast cap)) cap a, Nat)
-freezeStateStreamWith g cap yieldFuel stepBudget stepFn initA =
+freezeStateStreamWith g yieldFuel stepBudget stepFn initA =
   loop (gohSteps yieldFuel) stepBudget 0 0 0 0 initA
   where
     loop : (yRem, sRem, currTick, yUsed, sUsed, skAcc : Nat) ->
@@ -810,17 +828,17 @@ freezeStateStreamWith g cap yieldFuel stepBudget stepFn initA =
 ||| expressed directly as a thin specialization of `freezeStateStreamWith`.
 public export
 freezeTimeStreamWith :
-  {0 t : Time} ->
+  {0 t   : Time} ->
+  {0 cap : Nat} ->
   (g          : Nat) ->
-  (cap        : Nat) ->
   (yieldFuel  : GohFuel cap) ->
   (stepBudget : Nat) ->
   (combine    : a -> a -> a) ->
   (initAcc    : a) ->
   TimeStream t a ->
   SolidifiedStream (StaticTime (- cast g) (cast cap)) cap a
-freezeTimeStreamWith g cap yieldFuel stepBudget combine initAcc (MkTimeStream start at) =
-  let (r, _) = freezeStateStreamWith g cap yieldFuel stepBudget
+freezeTimeStreamWith g yieldFuel stepBudget combine initAcc (MkTimeStream start at) =
+  let (r, _) = freezeStateStreamWith g yieldFuel stepBudget
                  (\(tk, acc) =>
                     case at tk of
                       StreamDone       => (StreamDone, 0, 0)
