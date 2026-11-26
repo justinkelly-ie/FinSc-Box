@@ -542,11 +542,6 @@ record GohBound (0 capacity : Nat) where
   constructor MkGohBound
   boundSteps : Nat
 
-||| Constructs a direct runtime `GohBound 0` quota without inflating compile-time phantom `capacity`.
-public export
-mkGohBound : Nat -> GohBound 0
-mkGohBound s = MkGohBound s
-
 public export
 Eq (GohBound cap) where
   (MkGohBound s1) == (MkGohBound s2) = s1 == s2
