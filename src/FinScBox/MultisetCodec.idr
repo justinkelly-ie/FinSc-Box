@@ -47,8 +47,8 @@ renderInteger n =
   if n == 0
     then "0"
     else if n < 0
-      then pack ('-' :: posIntToCharsFuel 128 (-n) [])
-      else pack (posIntToCharsFuel 128 n [])
+      then pack ('-' :: posIntToCharsFuel maxBitScanFuel (-n) [])
+      else pack (posIntToCharsFuel maxBitScanFuel n [])
 
 --------------------------------------------------------------------------------
 -- 2. CANONICAL MULTISET RENDERER (EXACT PARITY WITH `FinScBox.HereditaryMSet.show`)

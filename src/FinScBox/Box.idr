@@ -879,23 +879,23 @@ unitStencilBox stepFn =
 
 ||| Divides all entries of a `Box BoxInt k` symmetrically by `den` and prunes values below `minCut`.
 public export
-scaleDivPruneBox : Ord k => (den, minCut : Integer) -> Box BoxInt k -> Box BoxInt k
+scaleDivPruneBox : Ord k => (den, minCut : BoxInt) -> Box BoxInt k -> Box BoxInt k
 scaleDivPruneBox den minCut b =
   if den <= 0
     then BoxLeaf
     else if den == 1
       then if minCut <= 1
              then b
-             else mapPruneBox (\w@(MkBoxInt v) => if abs v >= minCut then w else zeroWeight) b
-      else mapPruneBox (\w => let q@(MkBoxInt qv) = tdivPosBox w den
-                              in if abs qv >= minCut then q else zeroWeight) b
+             else mapPruneBox (\w => if abs w >= minCut then w else zeroWeight) b
+      else mapPruneBox (\w => let q = tdivPosBox w den
+                              in if abs q >= minCut then q else zeroWeight) b
 
 public export
-pruneMinMaxel : (Ord a, Ord b) => Integer -> Maxel BoxInt a b form -> Maxel BoxInt a b form
+pruneMinMaxel : (Ord a, Ord b) => BoxInt -> Maxel BoxInt a b form -> Maxel BoxInt a b form
 pruneMinMaxel minCut (MkMaxel m) = MkMaxel (scaleDivPruneBox 1 minCut m)
 
 public export
-scaleDivPruneMaxel : (Ord a, Ord b) => (den, minCut : Integer) -> Maxel BoxInt a b form -> Maxel BoxInt a b form
+scaleDivPruneMaxel : (Ord a, Ord b) => (den, minCut : BoxInt) -> Maxel BoxInt a b form -> Maxel BoxInt a b form
 scaleDivPruneMaxel den minCut (MkMaxel m) = MkMaxel (scaleDivPruneBox den minCut m)
 
 ------------------------------------------------------------------------

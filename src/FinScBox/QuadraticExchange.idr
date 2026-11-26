@@ -28,39 +28,39 @@ Show QuadraticPairResult where
     "QuadraticPairResult(" ++ show r.valA ++ ", " ++ show r.valB ++ ", " ++ show r.valU ++ ")"
 
 public export
-sqPairBox : BoxInt -> BoxInt -> Integer
-sqPairBox (MkBoxInt d) (MkBoxInt v) = d * d + v * v
+sqPairBox : BoxInt -> BoxInt -> BoxInt
+sqPairBox d v = d * d + v * v
 
 public export
 pythOddTieStep : (dDiff, numD : BoxInt) -> BoxInt
 pythOddTieStep dDiff numD =
-  if numD > MkBoxInt 0 || (boxIsZero numD && dDiff >= MkBoxInt 0)
-    then MkBoxInt 1
-    else MkBoxInt (-1)
+  if numD > 0 || (boxIsZero numD && dDiff >= 0)
+    then 1
+    else (-1)
 
 public export
-pythFallbackPair : (sSum, dDiff, numD, numU : BoxInt) -> (rDen : Integer) -> (BoxInt, BoxInt)
+pythFallbackPair : (sSum, dDiff, numD, numU, rDen : BoxInt) -> (BoxInt, BoxInt)
 pythFallbackPair sSum dDiff numD numU rDen =
   let dRaw        = tdivPosBox numD rDen
       uRaw        = tdivPosBox numU rDen
       oddMismatch = isOddBox dRaw /= isOddBox sSum
   in if not oddMismatch
        then (dRaw, uRaw)
-       else if dRaw > MkBoxInt 0
-         then (subBox dRaw (MkBoxInt 1), uRaw)
-         else if dRaw < MkBoxInt 0
-           then (addBox dRaw (MkBoxInt 1), uRaw)
+       else if dRaw > 0
+         then (dRaw - 1, uRaw)
+         else if dRaw < 0
+           then (dRaw + 1, uRaw)
            else
              let dNew = pythOddTieStep dDiff numD
                  uNew = if boxIsZero numD
-                          then if uRaw > MkBoxInt 0 then subBox uRaw (MkBoxInt 1)
-                               else if uRaw < MkBoxInt 0 then addBox uRaw (MkBoxInt 1)
+                          then if uRaw > 0 then uRaw - 1
+                               else if uRaw < 0 then uRaw + 1
                                else uRaw
                           else uRaw
              in (dNew, uNew)
 
 public export
-pythChoosePair : (sSum, dDiff, numD, numU : BoxInt) -> (rDen, eOld : Integer) -> (BoxInt, BoxInt)
+pythChoosePair : (sSum, dDiff, numD, numU, rDen, eOld : BoxInt) -> (BoxInt, BoxInt)
 pythChoosePair sSum dDiff numD numU rDen eOld =
   let dR          = rdivPosBox numD rDen
       uR          = rdivPosBox numU rDen
@@ -70,41 +70,39 @@ pythChoosePair sSum dDiff numD numU rDen eOld =
               then (dR, uR)
               else pythFallbackPair sSum dDiff numD numU rDen
        else
-         let MkBoxInt dRV = dR
-             MkBoxInt nDV = numD
-             prod         = dRV * rDen
-         in if prod < nDV
-              then let d1 = addBox dR (MkBoxInt 1)
+         let prod = dR * rDen
+         in if prod < numD
+              then let d1 = dR + 1
                    in if sqPairBox d1 uR <= eOld
                         then (d1, uR)
-                        else let d2 = subBox dR (MkBoxInt 1)
+                        else let d2 = dR - 1
                              in if sqPairBox d2 uR <= eOld
                                   then (d2, uR)
                                   else pythFallbackPair sSum dDiff numD numU rDen
-              else if prod > nDV
-                then let d1 = subBox dR (MkBoxInt 1)
+              else if prod > numD
+                then let d1 = dR - 1
                      in if sqPairBox d1 uR <= eOld
                           then (d1, uR)
-                          else let d2 = addBox dR (MkBoxInt 1)
+                          else let d2 = dR + 1
                                in if sqPairBox d2 uR <= eOld
                                     then (d2, uR)
                                     else pythFallbackPair sSum dDiff numD numU rDen
                 else
-                  let dC = if dRV > 0 then subBox dR (MkBoxInt 1)
-                           else if dRV < 0 then addBox dR (MkBoxInt 1)
+                  let dC = if dR > 0 then dR - 1
+                           else if dR < 0 then dR + 1
                            else pythOddTieStep dDiff numD
                   in if sqPairBox dC uR <= eOld
                        then (dC, uR)
                        else pythFallbackPair sSum dDiff numD numU rDen
 
-||| Parametric integer Pythagorean / Gaussian triple `(qtA, qtB, qtR)` (`qtA^2 + qtB^2 = qtR^2`),
+||| Parametric `BoxInt` Pythagorean / Gaussian triple `(qtA, qtB, qtR)` (`qtA^2 + qtB^2 = qtR^2`),
 ||| forming a commutative `Monoid` under Gaussian composition with neutral `(1, 0, 1)`.
 public export
 record QuadraticTriple where
   constructor MkQuadraticTriple
-  qtA : Integer
-  qtB : Integer
-  qtR : Integer
+  qtA : BoxInt
+  qtB : BoxInt
+  qtR : BoxInt
 
 public export
 Eq QuadraticTriple where
@@ -122,7 +120,7 @@ isQuadraticTriple t = t.qtR > 0 && (t.qtA * t.qtA + t.qtB * t.qtB == t.qtR * t.q
 ||| Generates the elementary Pythagorean triple `(m^2 - 1, 2m, m^2 + 1)` for `m >= 2`.
 public export
 pythGeneratorTriple : BoxInt -> QuadraticTriple
-pythGeneratorTriple (MkBoxInt mIn) =
+pythGeneratorTriple mIn =
   let mVal = if mIn < 2 then 2 else mIn
       m2   = mVal * mVal
   in MkQuadraticTriple (m2 - 1) (2 * mVal) (m2 + 1)
@@ -165,18 +163,16 @@ pythPowerTriple y@(S _) m = powQuadraticTriple y (pythGeneratorTriple m)
 public export
 exchangeQuadraticTriple : QuadraticTriple -> (pA, pB, u : BoxInt) -> QuadraticPairResult
 exchangeQuadraticTriple (MkQuadraticTriple aCoef bCoef rDen) pA pB u =
-  let dDiff = subBox pB pA
+  let dDiff = pB - pA
   in if (boxIsZero dDiff && boxIsZero u) || bCoef == 0 || rDen <= 0
        then MkQuadraticPairResult pA pB u
        else
-         let sSum        = addBox pA pB
-             MkBoxInt dV = dDiff
-             MkBoxInt uV = u
-             numD        = MkBoxInt (aCoef * dV + bCoef * uV)
-             numU        = MkBoxInt (aCoef * uV - bCoef * dV)
-             eOld        = dV * dV + uV * uV
-             (dN, uN)    = pythChoosePair sSum dDiff numD numU rDen eOld
-         in MkQuadraticPairResult (tdiv2Box (subBox sSum dN)) (tdiv2Box (addBox sSum dN)) uN
+         let sSum     = pA + pB
+             numD     = aCoef * dDiff + bCoef * u
+             numU     = aCoef * u - bCoef * dDiff
+             eOld     = sqPairBox dDiff u
+             (dN, uN) = pythChoosePair sSum dDiff numD numU rDen eOld
+         in MkQuadraticPairResult (tdiv2Box (sSum - dN)) (tdiv2Box (sSum + dN)) uN
 
 ||| Single-step (`y = 1`) parametric `(m^2 - 1, 2m, m^2 + 1)` integer quadratic exchange
 ||| on `(pA, pB, u)` for any `m >= 2`, preserving `pA + pB` and bounding `2*(pA^2 + pB^2) + u^2`.

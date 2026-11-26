@@ -35,10 +35,10 @@ singletonHMSet k w = MkHMSet (singletonBox k w)
 
 ||| Canonical signed scalar Laurent key `alpha^k` inside `PureMultiset`:
 ||| - `0` -> `emptyHMSet` (`[]`)
-||| - `k` -> `{ [] -> k }` (`singletonHMSet emptyHMSet (MkBoxInt k)`)
+||| - `k` -> `{ [] -> k }` (`singletonHMSet emptyHMSet k`)
 public export
-scalarKeyHMSet : Integer -> PureMultiset
-scalarKeyHMSet k = singletonHMSet emptyHMSet (MkBoxInt k)
+scalarKeyHMSet : BoxInt -> PureMultiset
+scalarKeyHMSet k = singletonHMSet emptyHMSet k
 
 ------------------------------------------------------------------------
 -- 2. TOTAL STRUCTURAL EQUALITY, BOUNDED-ZIPPER ORDERING & SHOW
@@ -338,24 +338,25 @@ divModPolyHMSet num den =
   case (polyLeadTerm num, polyLeadTerm den) of
     (Nothing, _) => (emptyHMSet, emptyHMSet)
     (_, Nothing) => (emptyHMSet, num)
-    (Just (dNum, _), Just (dDen, MkBoxInt cDen)) =>
+    (Just (dNum, _), Just (dDen, cDen)) =>
       go (S dNum) dDen cDen emptyHMSet num
   where
-    go : Nat -> Nat -> Integer -> PureMultiset -> PureMultiset -> (PureMultiset, PureMultiset)
+    go : Nat -> Nat -> BoxInt -> PureMultiset -> PureMultiset -> (PureMultiset, PureMultiset)
     go Z        _    _    qAcc rem = (qAcc, rem)
     go (S remF) dDen cDen qAcc rem =
       case polyLeadTerm rem of
         Nothing => (qAcc, emptyHMSet)
-        Just (dRem, MkBoxInt cRem) =>
+        Just (dRem, cRem) =>
           if dRem < dDen
             then (qAcc, rem)
             else
-              let (q, r) = divModIntegerEuclid cRem cDen
+              let q = divBox cRem cDen
+                  r = modBox cRem cDen
               in if r /= 0 || q == 0
                    then (qAcc, rem)
                    else
                      let shift = minus dRem dDen
-                         term  = singletonHMSet (scalarKeyHMSet (natToInteger shift)) (MkBoxInt q)
+                         term  = singletonHMSet (scalarKeyHMSet (cast shift)) q
                      in go remF dDen cDen (qAcc + term) (rem - term * den)
 
 public export
@@ -372,33 +373,39 @@ dividesNatPos d n = go n n
     go Z     (S _) = False
     go (S f) remN  = if remN < d then False else go f (minus remN d)
 
-||| Builds `[(n, Psi_n), ..., (1, Psi_1)]` for any `n` via exact polynomial division
-||| `Psi_k(x) = Z_k(x) / prod_{d | k, d < k} Psi_d(x)` with zero hardcoded lookup tables.
+||| Extracts `Psi_d(x)` from the `(monomialKey, d)` `GeneralForm` factor `Maxel`.
 public export
-gohPsiTableUpTo : Nat -> List (Nat, PureMultiset)
-gohPsiTableUpTo n = go n 1 []
-  where
-    stripDivisors : Nat -> PureMultiset -> List (Nat, PureMultiset) -> PureMultiset
-    stripDivisors _ cur [] = cur
-    stripDivisors k cur ((d, psiD) :: rest) =
-      let nxt = if dividesNatPos d k then divExactPolyHMSet cur psiD else cur
-      in stripDivisors k nxt rest
+lookupGohPsi : Nat -> Maxel BoxInt PureMultiset Nat GeneralForm -> PureMultiset
+lookupGohPsi d tbl =
+  let p = MkHMSet (actMaxelR tbl (singletonBox d 1))
+  in if p == emptyHMSet then 1 else p
 
-    go : Nat -> Nat -> List (Nat, PureMultiset) -> List (Nat, PureMultiset)
+||| Builds the 2-index polynomial factor Maxel `[monomialKey, d] -> coeff` for `d = 1..n`
+||| via `Psi_k(x) = Z_k(x) / prod_{d | k, d < k} Psi_d(x)` with zero hardcoded lookup tables.
+public export
+gohPsiMaxelUpTo : Nat -> Maxel BoxInt PureMultiset Nat GeneralForm
+gohPsiMaxelUpTo n = go n 1 emptyMaxel
+  where
+    stripDivs : Nat -> Nat -> Nat -> PureMultiset -> Maxel BoxInt PureMultiset Nat GeneralForm -> PureMultiset
+    stripDivs Z       _ _ cur _   = cur
+    stripDivs (S rem) d k cur tbl =
+      if d >= k then cur
+      else let nxt = if dividesNatPos d k then divExactPolyHMSet cur (lookupGohPsi d tbl) else cur
+           in stripDivs rem (S d) k nxt tbl
+
+    go : Nat -> Nat -> Maxel BoxInt PureMultiset Nat GeneralForm -> Maxel BoxInt PureMultiset Nat GeneralForm
     go Z       _ acc = acc
     go (S rem) k acc =
-      let psiK = stripDivisors k (spreadZHMSet k) acc
-      in go rem (S k) ((k, psiK) :: acc)
+      let MkHMSet bPsi = stripDivs k 1 k (spreadZHMSet k) acc
+          acc1         = foldBox (\monKey, coeff, m => setMaxelEdge monKey k coeff m) acc bPsi
+      in go rem (S k) acc1
 
 ||| Computes the `n`-th irreducible Cigler-Herbig spread polynomial factor `Psi_n(x)` for any `n >= 1`
 ||| (`gohPsiFactor 0 = 1`).
 public export
 gohPsiFactor : Nat -> PureMultiset
 gohPsiFactor Z = 1
-gohPsiFactor n =
-  case gohPsiTableUpTo n of
-    ((_, psiN) :: _) => psiN
-    []               => 1
+gohPsiFactor n = lookupGohPsi n (gohPsiMaxelUpTo n)
 
 public export
 powNatNum : Num a => a -> Nat -> a
@@ -406,23 +413,23 @@ powNatNum _ Z     = fromInteger 1
 powNatNum x (S k) = x * powNatNum x k
 
 ||| Polymorphic `PureMultiset` polynomial evaluator:
-||| - When `a = Integer`, evaluates `P(x0) in Z`.
+||| - When `a = BoxInt`, evaluates `P(x0)`.
 ||| - When `a = PureMultiset`, evaluates symbolic polynomial composition `(P o Q)(x) = P(Q(x))` in `PureMultiset`.
 public export
 evalPolyHMSetAt : Num a => PureMultiset -> a -> a
 evalPolyHMSetAt (MkHMSet b) x =
-  foldBox (\k, (MkBoxInt c), acc =>
+  foldBox (\k, c, acc =>
              let deg = polyMonomialDeg k
-             in acc + fromInteger c * powNatNum x deg)
+             in acc + fromInteger (unwrapBox c) * powNatNum x deg)
           (fromInteger 0)
           b
 
 ||| Evaluates the degree-`deg` homogenization `den^deg * P(num / den)` of a `PureMultiset` polynomial `P`,
 ||| connecting rational spread evaluation `Z_y(4 * B_1^2 / R_1^2)` to integer Pythagorean powers `4 * B_y^2`.
 public export
-evalHomogPolyHMSet : (deg : Nat) -> PureMultiset -> (num, den : Integer) -> Integer
+evalHomogPolyHMSet : (deg : Nat) -> PureMultiset -> (num, den : BoxInt) -> BoxInt
 evalHomogPolyHMSet deg (MkHMSet b) num den =
-  foldBox (\k, (MkBoxInt c), acc =>
+  foldBox (\k, c, acc =>
              let d = polyMonomialDeg k
              in acc + c * powNatNum num d * powNatNum den (minus deg d))
           0
@@ -627,7 +634,7 @@ selfBoundOfHMSet (MkHMSet rootBox) =
 public export
 data Time : Type where
   ||| 1. Fixed compact interval [low, high] known at compile time
-  StaticTime     : (low : Integer) -> (high : Integer) -> Time
+  StaticTime     : (low : BoxInt) -> (high : BoxInt) -> Time
   ||| 2. Forward causal ray [0, cap] governed by runtime `GohBound`
   BoundedTime    : (cap : Nat) -> Time
   ||| 3. Backward UV ray [-cap, 0] governed by runtime `GohBound`
@@ -703,16 +710,16 @@ record TimeStream (0 t : Time) (a : Type) where
 ||| Over `budget + c` ticks from `MkBoxInt 0` at constant load `c >= 0`, this emits
 ||| exact `budget` yields and `c` skips, returning cleanly to `MkBoxInt 0`.
 public export
-paceStreamStep : (budget : Integer) -> (load : Integer) -> (bal : BoxInt) -> (StreamStep (), BoxInt)
-paceStreamStep budget load (MkBoxInt b) =
+paceStreamStep : (budget : BoxInt) -> (load : BoxInt) -> (bal : BoxInt) -> (StreamStep (), BoxInt)
+paceStreamStep budget load bal =
   if budget <= 0
-    then (StreamYield (), MkBoxInt 0)
+    then (StreamYield (), 0)
     else
       let c     = if load < 0 then 0 else load
-          nextB = b + c
+          nextB = bal + c
       in if nextB <= budget
-           then (StreamYield (), MkBoxInt (if nextB < 0 then 0 else nextB))
-           else (StreamSkip, MkBoxInt (b - budget))
+           then (StreamYield (), if nextB < 0 then 0 else nextB)
+           else (StreamSkip, bal - budget)
 
 ------------------------------------------------------------------------
 -- 9. BOUND EXHAUSTION & TIME-HORIZON FREEZE-OUT
