@@ -63,7 +63,7 @@ splitChannels (MkHMSet box) =
 ||| Recombines `(M_+, M_-)` via `subHMSet`, annihilating any overlapping keys.
 public export
 interactChannels : MultisetWeight c => DualChannelView c -> HereditaryMSet c
-interactChannels (MkDualChannels posM negM) = subHMSet posM negM
+interactChannels (MkDualChannels posM negM) = subM posM negM
 
 public export
 isHMBoxLeaf : HereditaryMSet c -> Bool

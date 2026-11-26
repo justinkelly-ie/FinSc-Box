@@ -511,20 +511,6 @@ traceBox m =
             if x == y then addWeight acc w else acc)
           zeroWeight m
 
-||| Antisymmetric directed-edge Maxel singleton: `w * ([a, b] - [b, a])` (`a /= b`).
-||| Guarantees `transposeBox == negateBox` and `totalMassBox == zeroWeight`.
-public export
-mkAntisymEdge : (Ord k, MultisetWeight c) => k -> k -> c -> Box c (k, k)
-mkAntisymEdge a b w =
-  if a == b || isZero w
-    then BoxLeaf
-    else setBox (b, a) (negWeight w) (singletonBox (a, b) w)
-
-||| Decides whether a square 2D `Box c (k, k)` is antisymmetric (`transposeBox m == negateBox m`).
-public export
-isAntisymBox : (Ord k, MultisetWeight c) => Box c (k, k) -> Bool
-isAntisymBox m = transposeBox m == negateBox m
-
 ||| Diagonal embedding of a 1D `Box c k` onto the coincidence diagonal `(k, k)`.
 public export
 diagEmbedBox : (Ord k, MultisetWeight c) => Box c k -> Box c (k, k)
@@ -661,6 +647,12 @@ composeMaxel : (Ord a, Ord b, Ord d, MultisetWeight c) =>
                Maxel c a b GeneralForm -> Maxel c b d GeneralForm -> Maxel c a d GeneralForm
 composeMaxel (MkMaxel m1) (MkMaxel m2) = MkMaxel (composeBox m1 m2)
 
+||| Right linear action `(M v)_a = sum_b M[a, b] * v[b]` of a `GeneralForm` Maxel on `Box c b`.
+public export
+actMaxelR : (Ord a, Ord b, MultisetWeight c) => Maxel c a b GeneralForm -> Box c b -> Box c a
+actMaxelR (MkMaxel m) v =
+  foldBox (\(x, y), w, acc => addAtKeyBox x (mulWeight w (lookupBox y v)) acc) BoxLeaf m
+
 public export
 lookupHalfBox : Ord k => MultisetWeight c => (allowDiag, antisymOff : Bool) -> k -> k -> Box c (k, k) -> c
 lookupHalfBox allowDiag antisymOff x y m =
@@ -744,22 +736,6 @@ dotSymHalfBox m1 m2 =
           m1
 
 public export
-addMaxel : (Ord a, Ord b, MultisetWeight c) => Maxel c a b form -> Maxel c a b form -> Maxel c a b form
-addMaxel (MkMaxel m1) (MkMaxel m2) = MkMaxel (unionBox m1 m2)
-
-public export
-subMaxel : (Ord a, Ord b, MultisetWeight c) => Maxel c a b form -> Maxel c a b form -> Maxel c a b form
-subMaxel (MkMaxel m1) (MkMaxel m2) = MkMaxel (subBox m1 m2)
-
-public export
-negateMaxel : MultisetWeight c => Maxel c a b form -> Maxel c a b form
-negateMaxel (MkMaxel m) = MkMaxel (negateBox m)
-
-public export
-scaleMaxel : MultisetWeight c => c -> Maxel c a b form -> Maxel c a b form
-scaleMaxel s (MkMaxel m) = MkMaxel (scaleBox s m)
-
-public export
 dotMaxelByTag :
   {auto ordA : Ord a} -> {auto ordB : Ord b} -> {auto mw : MultisetWeight c} ->
   {0 form : MaxelForm a b} -> MaxelFormTag form -> Maxel c a b form -> Maxel c a b form -> c
@@ -772,12 +748,6 @@ dotMaxelByTag TagAntisym     (MkMaxel m1) (MkMaxel m2) =
   where
     dotKK : Ord k => Box c (k, k) -> Box c (k, k) -> c
     dotKK = dotBox
-
-public export
-dotMaxel :
-  {auto ordA : Ord a} -> {auto ordB : Ord b} -> {auto mw : MultisetWeight c} ->
-  {0 form : MaxelForm a b} -> KnownMaxelForm form => Maxel c a b form -> Maxel c a b form -> c
-dotMaxel = dotMaxelByTag @{ordA} @{ordB} @{mw} maxelFormTag
 
 public export
 transposeMaxel :
@@ -812,16 +782,6 @@ toGeneralMaxel {form = GeneralForm}     m           = m
 toGeneralMaxel {form = SymForm}         (MkMaxel m) = MkMaxel (expandHalfBox True  id        m)
 toGeneralMaxel {form = AntisymForm}     (MkMaxel m) = MkMaxel (expandHalfBox False negWeight m)
 toGeneralMaxel {form = DiagAntisymForm} (MkMaxel m) = MkMaxel (expandHalfBox True  negWeight m)
-
-||| Decides whether the full square expansion of `m` is symmetric (`M^T == M`).
-public export
-isSymMaxel : (Ord k, MultisetWeight c) => {form : MaxelForm k k} -> Maxel c k k form -> Bool
-isSymMaxel m = let g = toGeneralMaxel m in transposeMaxel g == g
-
-||| Decides whether the full square expansion of `m` is antisymmetric (`M^T == -M`).
-public export
-isAntisymMaxel : (Ord k, MultisetWeight c) => {form : MaxelForm k k} -> Maxel c k k form -> Bool
-isAntisymMaxel m = let g = toGeneralMaxel m in transposeMaxel g == negateMaxel g
 
 public export
 hadamardMaxelForm : MaxelForm a b -> MaxelForm a b -> MaxelForm a b
@@ -880,19 +840,18 @@ hadamardMaxel = hadamardMaxelByTag @{ordA} @{ordB} @{mw} maxelFormTag maxelFormT
 
 public export
 shiftConvolveMaxel :
-  (Ord k, MultisetWeight c) =>
+  (MonoidCoord k, MultisetWeight c) =>
   {form : MaxelForm k k} ->
-  (k -> k -> k) ->
   Maxel c k k form ->
   Box c k ->
   Maxel c k k form
-shiftConvolveMaxel _ (MkMaxel BoxLeaf) _ = MkMaxel BoxLeaf
-shiftConvolveMaxel _ _ BoxLeaf           = MkMaxel BoxLeaf
-shiftConvolveMaxel {form} shiftAdd (MkMaxel m) shiftBox =
+shiftConvolveMaxel (MkMaxel BoxLeaf) _ = MkMaxel BoxLeaf
+shiftConvolveMaxel _ BoxLeaf           = MkMaxel BoxLeaf
+shiftConvolveMaxel {form} (MkMaxel m) shiftBox =
   MkMaxel $ foldBox (\(x, y), w1, outer =>
                        foldBox (\s, w2, inner =>
-                                  let x'   = shiftAdd x s
-                                      y'   = shiftAdd y s
+                                  let x'   = combine x s
+                                      y'   = combine y s
                                       prod = mulWeight w1 w2
                                   in case form of
                                        GeneralForm     => if isZero prod then inner else addAtKeyBox (x', y') prod inner
@@ -902,19 +861,14 @@ shiftConvolveMaxel {form} shiftAdd (MkMaxel m) shiftBox =
                                outer shiftBox)
                     BoxLeaf m
 
-||| Sparse 2-axis balanced unit-shift multiset `[+dx, -dx, +dy, -dy]` given a coordinate negator.
+||| Symmetric unit-step stencil `sum_{a in axes} ([+stepFn a] + [-stepFn a])` over any `GroupCoord k`.
 public export
-unitAxes2DWith : (Ord k, MultisetWeight c) => (negShift : k -> k) -> (dx, dy : k) -> Box c k
-unitAxes2DWith negShift dx dy =
-  addAtKeyBox (negShift dy) oneWeight $
-  addAtKeyBox dy            oneWeight $
-  addAtKeyBox (negShift dx) oneWeight $
-  singletonBox dx           oneWeight
-
-||| Sparse 2-axis balanced unit-shift multiset `[+dx, -dx, +dy, -dy]` over any `GroupCoord k`.
-public export
-unitAxes2D : (GroupCoord k, MultisetWeight c) => (dx, dy : k) -> Box c k
-unitAxes2D = unitAxes2DWith inverse
+unitStencilBox : (GroupCoord k, MultisetWeight c) => (a -> k) -> Box d a -> Box c k
+unitStencilBox stepFn =
+  foldBox (\axKey, _, acc =>
+             let d = stepFn axKey
+             in addAtKeyBox (inverse d) oneWeight (addAtKeyBox d oneWeight acc))
+          BoxLeaf
 
 ||| Retains strictly entries whose magnitude meets `minCut` (for sparse series pruning).
 public export
@@ -940,37 +894,6 @@ pruneMinMaxel minCut (MkMaxel m) = MkMaxel (pruneMinBox minCut m)
 public export
 scaleDivPruneMaxel : (Ord a, Ord b) => (den, minCut : Integer) -> Maxel BoxInt a b form -> Maxel BoxInt a b form
 scaleDivPruneMaxel den minCut (MkMaxel m) = MkMaxel (scaleDivPruneBox den minCut m)
-
-public export
-laurentGreenLoop : Ord k =>
-                   (k -> k -> k) ->
-                   Nat ->
-                   (den, minCut : Integer) ->
-                   Box BoxInt k ->
-                   Box BoxInt k ->
-                   Box BoxInt k ->
-                   Box BoxInt k
-laurentGreenLoop _ Z _ _ _ _ acc = acc
-laurentGreenLoop _ _ _ _ _ BoxLeaf acc = acc
-laurentGreenLoop shiftAdd (S rem) den minCut shiftBox cur acc =
-  let spread = pairBoxWith shiftAdd cur shiftBox
-      nxt    = scaleDivPruneBox den minCut spread
-      acc1   = unionBox acc nxt
-  in laurentGreenLoop shiftAdd rem den minCut shiftBox nxt acc1
-
-||| Computes the truncated sparse geometric shift series
-||| `sum_{k=0}^{hops} trunc(((shiftBox / den)^k) * src)` over any associative shift `shiftAdd`,
-||| pruning intermediates below `minCut` to keep AVL trees lean.
-public export
-laurentGreenSeries : Ord k =>
-                     (k -> k -> k) ->
-                     (hops : Nat) ->
-                     (den, minCut : Integer) ->
-                     (shiftBox, src : Box BoxInt k) ->
-                     Box BoxInt k
-laurentGreenSeries shiftAdd hops den minCut shiftBox src =
-  let cur0 = pruneMinBox minCut src
-  in laurentGreenLoop shiftAdd hops den minCut shiftBox cur0 cur0
 
 ------------------------------------------------------------------------
 -- 7. STANDARD ALGEBRAIC INSTANCES ON `Box c k`
@@ -1008,12 +931,22 @@ public export
 public export
 (Ord a, Ord b, MultisetWeight c, KnownMaxelForm form) =>
 MultisetAlgebra c (Maxel c a b form) where
-  zeroM  = emptyMaxel
-  addM   = addMaxel
-  negM   = negateMaxel
-  subM   = subMaxel
-  scaleM = scaleMaxel
-  dotM   = dotMaxel
+  zeroM                          = emptyMaxel
+  addM (MkMaxel m1) (MkMaxel m2) = MkMaxel (unionBox m1 m2)
+  negM (MkMaxel m)               = MkMaxel (negateBox m)
+  subM (MkMaxel m1) (MkMaxel m2) = MkMaxel (subBox m1 m2)
+  scaleM s (MkMaxel m)           = MkMaxel (scaleBox s m)
+  dotM                           = dotMaxelByTag maxelFormTag
+
+||| Decides whether the full square expansion of `m` is symmetric (`M^T == M`).
+public export
+isSymMaxel : (Ord k, MultisetWeight c) => {form : MaxelForm k k} -> Maxel c k k form -> Bool
+isSymMaxel m = let g = toGeneralMaxel m in transposeMaxel g == g
+
+||| Decides whether the full square expansion of `m` is antisymmetric (`M^T == -M`).
+public export
+isAntisymMaxel : (Ord k, MultisetWeight c) => {form : MaxelForm k k} -> Maxel c k k form -> Bool
+isAntisymMaxel m = let g = toGeneralMaxel m in transposeMaxel g == negM g
 
 public export
 (Ord a, Ord b, MultisetWeight c, KnownMaxelForm f1, KnownMaxelForm f2) =>
@@ -1095,8 +1028,3 @@ splitBoxChannels box =
               EQ => (pAcc, nAcc))
           (BoxLeaf, BoxLeaf)
           box
-
-||| Multiset symmetric difference: (M1 \Delta M2)(x) = |M1(x) - M2(x)|.
-public export
-symmetricDiffMSet : Ord k => Box BoxInt k -> Box BoxInt k -> Box BoxInt k
-symmetricDiffMSet m1 m2 = mapBoxWeight absBox (subBox m1 m2)

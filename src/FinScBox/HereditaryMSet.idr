@@ -236,6 +236,15 @@ outerHMSet (MkHMSet b1) (MkHMSet b2) =
 ------------------------------------------------------------------------
 
 public export
+MultisetWeight c => MonoidCoord (HereditaryMSet c) where
+  combine = addHMSet
+  origin  = emptyHMSet
+
+public export
+MultisetWeight c => GroupCoord (HereditaryMSet c) where
+  inverse = negHMSet
+
+public export
 MultisetWeight c => Semigroup (HereditaryMSet c) where
   (<+>) = addHMSet
 

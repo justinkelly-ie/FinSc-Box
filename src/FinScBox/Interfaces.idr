@@ -3,7 +3,6 @@ module FinScBox.Interfaces
 import public Data.Fin
 import public Data.Linear
 import Data.Nat
-import public Data.Vect
 import FinScBox.BoxInt
 
 %default total
@@ -17,47 +16,39 @@ public export
 interface Ord k => MonoidCoord k where
   combine : k -> k -> k
   origin  : k
-  0 assoc : (x, y, z : k) -> combine x (combine y z) = combine (combine x y) z
 
 ||| Reversible coordinate space with exact additive inverses.
 public export
 interface MonoidCoord k => GroupCoord k where
-  inverse  : k -> k
-  0 invLaw : (x : k) -> combine x (inverse x) = FinScBox.Interfaces.origin
+  inverse : k -> k
+
+||| Difference (`a - b = combine a (inverse b)`) over any `GroupCoord k`.
+public export
+coordSub : GroupCoord k => k -> k -> k
+coordSub a b = combine a (inverse b)
 
 public export
 MonoidCoord Nat where
   combine = (+)
   origin  = 0
-  assoc x y z = plusAssociative x y z
 
 public export
 MonoidCoord () where
   combine _ _ = ()
   origin = ()
-  assoc _ _ _ = Refl
 
 public export
 GroupCoord () where
   inverse _ = ()
-  invLaw _ = Refl
 
 public export
 (MonoidCoord a, MonoidCoord b) => MonoidCoord (a, b) where
   combine (x1, y1) (x2, y2) = (combine x1 x2, combine y1 y2)
   origin = (origin, origin)
-  assoc (x1, y1) (x2, y2) (x3, y3) =
-    rewrite assoc x1 x2 x3 in
-    rewrite assoc y1 y2 y3 in
-    Refl
 
 public export
 (GroupCoord a, GroupCoord b) => GroupCoord (a, b) where
   inverse (x, y) = (inverse x, inverse y)
-  invLaw (x, y) =
-    rewrite invLaw x in
-    rewrite invLaw y in
-    Refl
 
 -----------------------------------------------------------------------
 -- 2. MULTIPLICITY WEIGHTS & CORE MULTISET ALGEBRA OPERATORS
@@ -403,15 +394,22 @@ addSignedInvLaw (PosZ k) = subSDiag k
 addSignedInvLaw (NegZ k) = subSDiag k
 
 public export
+mulSigned : SignedCoord -> SignedCoord -> SignedCoord
+mulSigned ZeroZ    _        = ZeroZ
+mulSigned _        ZeroZ    = ZeroZ
+mulSigned (PosZ a) (PosZ b) = PosZ (a * S b + b)
+mulSigned (NegZ a) (NegZ b) = PosZ (a * S b + b)
+mulSigned (PosZ a) (NegZ b) = NegZ (a * S b + b)
+mulSigned (NegZ a) (PosZ b) = NegZ (a * S b + b)
+
+public export
 MonoidCoord SignedCoord where
   combine = addSigned
   origin  = ZeroZ
-  assoc   = addSignedAssoc
 
 public export
 GroupCoord SignedCoord where
   inverse = negSigned
-  invLaw  = addSignedInvLaw
 
 public export
 signedToBoxInt : SignedCoord -> BoxInt
@@ -425,6 +423,17 @@ intToSigned v =
   if v == 0 then ZeroZ
   else if v > 0 then PosZ (integerToNat (v - 1))
   else NegZ (integerToNat ((-v) - 1))
+
+public export
+Num SignedCoord where
+  (+) = addSigned
+  (*) = mulSigned
+  fromInteger = intToSigned
+
+public export
+Neg SignedCoord where
+  negate = negSigned
+  (-) a b = addSigned a (negSigned b)
 
 public export
 Cast SignedCoord BoxInt where
@@ -511,17 +520,28 @@ public export
 implementation {n : Nat} -> MonoidCoord (Space n) where
   combine = addSpace
   origin  = zeroSpace n
-  assoc   = addSpaceAssoc
 
 public export
 implementation {n : Nat} -> GroupCoord (Space n) where
   inverse = negSpace
-  invLaw  = addSpaceInvLaw
+
+public export
+Semigroup (Space n) where
+  (<+>) = addSpace
+
+public export
+implementation {n : Nat} -> Monoid (Space n) where
+  neutral = zeroSpace n
 
 public export
 indexSpace : Fin n -> Space n -> SignedCoord
 indexSpace FZ     (x :: _)  = x
 indexSpace (FS i) (_ :: xs) = indexSpace i xs
+
+public export
+replaceSpace : Fin n -> SignedCoord -> Space n -> Space n
+replaceSpace FZ     v (_ :: xs) = v :: xs
+replaceSpace (FS i) v (x :: xs) = x :: replaceSpace i v xs
 
 public export
 unitSpace : {n : Nat} -> Fin n -> Space n
@@ -532,11 +552,6 @@ public export
 tabulateSpace : {n : Nat} -> (Fin n -> SignedCoord) -> Space n
 tabulateSpace {n = Z}   _ = []
 tabulateSpace {n = S k} f = f FZ :: tabulateSpace (f . FS)
-
-public export
-fromIntegers : Vect n Integer -> Space n
-fromIntegers []        = []
-fromIntegers (x :: xs) = intToSigned x :: fromIntegers xs
 
 public export
 foldSpaceWithFin : {n : Nat} -> (Fin n -> SignedCoord -> a -> a) -> a -> Space n -> a
