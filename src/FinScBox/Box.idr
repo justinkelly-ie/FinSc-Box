@@ -111,56 +111,40 @@ deleteBox target (BoxNode _ l k w r) =
 -- 3. KEYED LOOKUPS, OVERWRITES & ACCUMULATING INSERTIONS
 ------------------------------------------------------------------------
 
-||| Comparator-parameterised O(log N) lookup returning `zeroWeight` when absent.
-public export
-lookupBoxBy : MultisetWeight c => (lt : k -> k -> Bool) -> (eq : k -> k -> Bool) -> k -> Box c k -> c
-lookupBoxBy _ _ _ BoxLeaf = zeroWeight
-lookupBoxBy lt eq val (BoxNode _ l x w r) =
-  if eq val x then w
-  else if lt val x then lookupBoxBy lt eq val l
-  else lookupBoxBy lt eq val r
-
-||| Comparator-parameterised O(log N) canonical overwrite with zero-pruning.
-public export
-setBoxBy : MultisetWeight c => (lt : k -> k -> Bool) -> (eq : k -> k -> Bool) -> k -> c -> Box c k -> Box c k
-setBoxBy _ _ val w BoxLeaf =
-  if isZero w then BoxLeaf else BoxNode 1 BoxLeaf val w BoxLeaf
-setBoxBy lt eq val w (BoxNode _ l x cur r) =
-  if eq val x
-    then if isZero w then deleteRootBoxNode l x r else mkBoxNode l x w r
-    else if lt val x
-      then balanceBoxNode (setBoxBy lt eq val w l) x cur r
-      else balanceBoxNode l x cur (setBoxBy lt eq val w r)
-
-||| Comparator-parameterised O(log N) accumulating addition with zero-pruning.
-public export
-addBoxBy : MultisetWeight c => (lt : k -> k -> Bool) -> (eq : k -> k -> Bool) -> k -> c -> Box c k -> Box c k
-addBoxBy _ _ val dw BoxLeaf =
-  if isZero dw then BoxLeaf else BoxNode 1 BoxLeaf val dw BoxLeaf
-addBoxBy lt eq val dw node@(BoxNode _ l x cur r) =
-  if isZero dw then node
-  else if eq val x
-    then let newW = addWeight cur dw
-         in if isZero newW then deleteRootBoxNode l x r else mkBoxNode l x newW r
-    else if lt val x
-      then balanceBoxNode (addBoxBy lt eq val dw l) x cur r
-      else balanceBoxNode l x cur (addBoxBy lt eq val dw r)
-
 ||| Looks up a key in `Box c k`, returning `zeroWeight` when absent.
 public export
 lookupBox : (Ord k, MultisetWeight c) => k -> Box c k -> c
-lookupBox = lookupBoxBy (<) (==)
+lookupBox _   BoxLeaf = zeroWeight
+lookupBox val (BoxNode _ l x w r) =
+  case compare val x of
+    EQ => w
+    LT => lookupBox val l
+    GT => lookupBox val r
 
-||| Canonical zero-pruning overwrite: sets `target` to `val`, deleting the node
-||| whenever `isZero val` holds so `BoxLeaf` remains the unique canonical zero.
+||| Canonical zero-pruning overwrite: sets `val` to `w`, deleting the node
+||| whenever `isZero w` holds so `BoxLeaf` remains the unique canonical zero.
 public export
 setBox : (Ord k, MultisetWeight c) => k -> c -> Box c k -> Box c k
-setBox = setBoxBy (<) (==)
+setBox val w BoxLeaf =
+  if isZero w then BoxLeaf else BoxNode 1 BoxLeaf val w BoxLeaf
+setBox val w (BoxNode _ l x cur r) =
+  case compare val x of
+    EQ => if isZero w then deleteRootBoxNode l x r else mkBoxNode l x w r
+    LT => balanceBoxNode (setBox val w l) x cur r
+    GT => balanceBoxNode l x cur (setBox val w r)
 
-||| Accumulates `delta` onto `target` (`cur + delta`), pruning on annihilation.
+||| Accumulates `dw` onto `val` (`cur + dw`), pruning on annihilation.
 public export
 addAtKeyBox : (Ord k, MultisetWeight c) => k -> c -> Box c k -> Box c k
-addAtKeyBox = addBoxBy (<) (==)
+addAtKeyBox val dw BoxLeaf =
+  if isZero dw then BoxLeaf else BoxNode 1 BoxLeaf val dw BoxLeaf
+addAtKeyBox val dw node@(BoxNode _ l x cur r) =
+  if isZero dw then node
+  else case compare val x of
+         EQ => let newW = addWeight cur dw
+               in if isZero newW then deleteRootBoxNode l x r else mkBoxNode l x newW r
+         LT => balanceBoxNode (addAtKeyBox val dw l) x cur r
+         GT => balanceBoxNode l x cur (addAtKeyBox val dw r)
 
 ------------------------------------------------------------------------
 -- 4. CONSTRUCTORS & IN-ORDER FOLDING
@@ -1000,15 +984,6 @@ checkBoxBoundsBy keyOk (BoxNode h l k w r) =
                      then Just (Just (maybe k fst optL, maybe k snd optR))
                      else Nothing
               _ => Nothing
-
-||| Boolean canonical predicate checking BST ordering, AVL balance, height cache,
-||| and zero-weight absence on a `Box c k`.
-public export
-isCanonicalBox : MultisetWeight c => Ord k => Box c k -> Bool
-isCanonicalBox b =
-  case checkBoxBoundsBy (const True) b of
-    Nothing => False
-    Just _  => True
 
 ||| Total boolean-to-`Dec` witness lift with zero runtime overhead.
 public export

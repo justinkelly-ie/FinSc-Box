@@ -480,20 +480,10 @@ toCanonicalHMSet m =
 -- 6. INTRINSIC `GohBound` DERIVATION & SELF-BOUNDING ON `HereditaryMSet c`
 ------------------------------------------------------------------------
 
-||| Backward-or-stay half-step dipole (`alpha^(-1) + 1`) as a `PureMultiset`.
-public export
-halfStepBackward : PureMultiset
-halfStepBackward = wrapBox (scalarKeyHMSet (-1)) + 1
-
-||| Forward-or-stay half-step dipole (`alpha^(+1) + 1`) as a `PureMultiset`.
-public export
-halfStepForward : PureMultiset
-halfStepForward = polyX + 1
-
 ||| Full symmetric motion tick (`(alpha^(-1) + 1) * (alpha^(+1) + 1) = alpha^(-1) + 2*alpha^0 + alpha^(+1)`).
 public export
 symmetricMotionTick : PureMultiset
-symmetricMotionTick = halfStepBackward * halfStepForward
+symmetricMotionTick = (wrapBox (scalarKeyHMSet (-1)) + 1) * (polyX + 1)
 
 ||| Fundamental binary polarity count (`2`) extracted directly as pure Peano `Nat`
 ||| from the two opposing non-origin poles (`-1` and `+1`) of `symmetricMotionTick`
@@ -575,10 +565,6 @@ record SupportStats where
   totalMass : Nat
   maxDeg    : Nat
 
-public export
-emptySupportStats : SupportStats
-emptySupportStats = MkSupportStats 0 0 0
-
 ||| Extracts the maximum nested `weightMagnitude` inside a hereditary box
 ||| bounded cleanly by remaining hereditary nesting depth `fuel`.
 public export
@@ -596,7 +582,7 @@ maxWeightInBox (S rem) box = goBox box
 ||| any `MultisetWeight c` carrier (`BoxInt`, `SignedBit`, or `MultisetBit`).
 public export
 collectSupportStats : MultisetWeight c => Box c (HereditaryMSet c) -> SupportStats
-collectSupportStats BoxLeaf = emptySupportStats
+collectSupportStats BoxLeaf = MkSupportStats 0 0 0
 collectSupportStats (BoxNode _ left (MkHMSet innerBox) w right) =
   let lStats     = collectSupportStats left
       rStats     = collectSupportStats right
