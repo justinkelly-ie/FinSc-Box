@@ -524,6 +524,25 @@ transposeMaxelForm SymForm         = SymForm
 transposeMaxelForm AntisymForm     = AntisymForm
 transposeMaxelForm DiagAntisymForm = DiagAntisymForm
 
+public export
+eqMaxelForm : {0 a, b, c, d : Type} -> MaxelForm a b -> MaxelForm c d -> Bool
+eqMaxelForm GeneralForm     GeneralForm     = True
+eqMaxelForm SymForm         SymForm         = True
+eqMaxelForm AntisymForm     AntisymForm     = True
+eqMaxelForm DiagAntisymForm DiagAntisymForm = True
+eqMaxelForm _               _               = False
+
+public export
+Eq (MaxelForm a b) where
+  (==) = eqMaxelForm
+
+public export
+Show (MaxelForm a b) where
+  show GeneralForm     = "GeneralForm"
+  show SymForm         = "SymForm"
+  show AntisymForm     = "AntisymForm"
+  show DiagAntisymForm = "DiagAntisymForm"
+
 ||| Runtime singleton witness for `MaxelForm`, enabling single-instance algebraic dispatch.
 public export
 data MaxelFormTag : MaxelForm a b -> Type where
@@ -531,6 +550,17 @@ data MaxelFormTag : MaxelForm a b -> Type where
   TagSym         : MaxelFormTag SymForm
   TagAntisym     : MaxelFormTag AntisymForm
   TagDiagAntisym : MaxelFormTag DiagAntisymForm
+
+public export
+Eq (MaxelFormTag form) where
+  _ == _ = True
+
+public export
+Show (MaxelFormTag form) where
+  show TagGeneral     = "TagGeneral"
+  show TagSym         = "TagSym"
+  show TagAntisym     = "TagAntisym"
+  show TagDiagAntisym = "TagDiagAntisym"
 
 public export
 interface KnownMaxelForm (0 form : MaxelForm a b) where
@@ -990,6 +1020,26 @@ public export
 decideBoolTrue : (cond : Bool) -> Dec (cond = True)
 decideBoolTrue True  = Yes Refl
 decideBoolTrue False = No (\case Refl impossible)
+
+public export
+checkBoxWithKeyPred :
+  {auto ordA : Ord a} -> {auto ordB : Ord b} -> {auto mw : MultisetWeight c} ->
+  ((a, b) -> Bool) -> Box c (a, b) -> Bool
+checkBoxWithKeyPred p m =
+  case checkBoxBoundsBy p m of
+    Just _  => True
+    Nothing => False
+
+||| Sterling recognition predicate certifying canonical AVL invariants, zero-pruning,
+||| and `form` half-storage (`x <= y` on `SymForm`/`DiagAntisymForm`, `x < y` on `AntisymForm`).
+public export
+isCanonicalMaxel :
+  {auto ordA : Ord a} -> {auto ordB : Ord b} -> {auto mw : MultisetWeight c} ->
+  {form : MaxelForm a b} -> Maxel c a b form -> Bool
+isCanonicalMaxel {form = GeneralForm}     (MkMaxel m) = checkBoxWithKeyPred @{ordA} @{ordB} @{mw} (\_ => True) m
+isCanonicalMaxel {form = SymForm}         (MkMaxel m) = checkBoxWithKeyPred @{ordA} @{ordA} @{mw} (\(x, y) => compare @{ordA} x y /= GT) m
+isCanonicalMaxel {form = AntisymForm}     (MkMaxel m) = checkBoxWithKeyPred @{ordA} @{ordA} @{mw} (\(x, y) => compare @{ordA} x y == LT) m
+isCanonicalMaxel {form = DiagAntisymForm} (MkMaxel m) = checkBoxWithKeyPred @{ordA} @{ordA} @{mw} (\(x, y) => compare @{ordA} x y /= GT) m
 
 ||| Splits a signed `Box c k` into disjoint positive (`M_+`) and negative (`M_-`) channels,
 ||| with positive weights in each channel: `posBox` has entries with `w > 0`, `negBox` has `-w` for `w < 0`.

@@ -565,6 +565,14 @@ record SupportStats where
   totalMass : Nat
   maxDeg    : Nat
 
+public export
+Eq SupportStats where
+  a == b = a.nnz == b.nnz && a.totalMass == b.totalMass && a.maxDeg == b.maxDeg
+
+public export
+Show SupportStats where
+  show s = "SupportStats(nnz=" ++ show s.nnz ++ ", mass=" ++ show s.totalMass ++ ", maxDeg=" ++ show s.maxDeg ++ ")"
+
 ||| Extracts the maximum nested `weightMagnitude` inside a hereditary box
 ||| bounded cleanly by remaining hereditary nesting depth `fuel`.
 public export
@@ -754,7 +762,9 @@ public export
     s1.freezeReason == s2.freezeReason &&
     s1.freezeTick == s2.freezeTick &&
     s1.yieldsConsumed == s2.yieldsConsumed &&
-    s1.stepsConsumed == s2.stepsConsumed
+    s1.stepsConsumed == s2.stepsConsumed &&
+    s1.remainingYield == s2.remainingYield &&
+    s1.remainingSteps == s2.remainingSteps
 
 ||| Stateful Streaming Freeze-Out Evaluator over an initial state `initA : a` populated at `t = 0`:
 ||| At each tick, `stepFn acc` emits `(StreamStep a, yieldCost, skipsSaved)`:

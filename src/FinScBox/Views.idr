@@ -21,6 +21,19 @@ data AntiBoxView : (c : Type) -> Type where
   PopRedBox   : (term : HereditaryMSet c) -> (rest : HereditaryMSet c) -> AntiBoxView c
 
 public export
+MultisetWeight c => Eq (AntiBoxView c) where
+  EmptyVacuum        == EmptyVacuum        = True
+  (PopBlackBox t1 r1) == (PopBlackBox t2 r2) = t1 == t2 && r1 == r2
+  (PopRedBox   t1 r1) == (PopRedBox   t2 r2) = t1 == t2 && r1 == r2
+  _                  == _                  = False
+
+public export
+Show c => Show (AntiBoxView c) where
+  show EmptyVacuum       = "EmptyVacuum"
+  show (PopBlackBox t r) = "PopBlackBox(" ++ show t ++ ", " ++ show r ++ ")"
+  show (PopRedBox   t r) = "PopRedBox(" ++ show t ++ ", " ++ show r ++ ")"
+
+public export
 antiBoxLoop : QuantumCarrier c => Nat -> HereditaryMSet c -> AntiBoxView c
 antiBoxLoop Z _ = EmptyVacuum
 antiBoxLoop (S rem) (MkHMSet BoxLeaf) = EmptyVacuum
@@ -53,6 +66,27 @@ record DualChannelView (c : Type) where
   posChannel : HereditaryMSet c
   negChannel : HereditaryMSet c
 
+public export
+MultisetWeight c => Eq (DualChannelView c) where
+  a == b = a.posChannel == b.posChannel && a.negChannel == b.negChannel
+
+public export
+Show c => Show (DualChannelView c) where
+  show d = "DualChannels(+=" ++ show d.posChannel ++ ", -=" ++ show d.negChannel ++ ")"
+
+public export
+disjointDualSupports : MultisetWeight c => DualChannelView c -> Bool
+disjointDualSupports (MkDualChannels p n) =
+  case hadamardHMSet p n of
+    MkHMSet BoxLeaf => True
+    _               => False
+
+||| Sterling recognition predicate verifying canonical AVL trees and disjoint `(+/-)` supports.
+public export
+isCanonicalDualChannels : MultisetWeight c => DualChannelView c -> Bool
+isCanonicalDualChannels d =
+  isCanonicalHMSet d.posChannel && isCanonicalHMSet d.negChannel && disjointDualSupports d
+
 ||| Projects a signed multiset into `(M_+, M_-)` using `compare weight zeroWeight`.
 public export
 splitChannels : MultisetWeight c => HereditaryMSet c -> DualChannelView c
@@ -64,16 +98,6 @@ splitChannels (MkHMSet box) =
 public export
 interactChannels : MultisetWeight c => DualChannelView c -> HereditaryMSet c
 interactChannels (MkDualChannels posM negM) = subM posM negM
-
-public export
-isHMBoxLeaf : HereditaryMSet c -> Bool
-isHMBoxLeaf (MkHMSet BoxLeaf) = True
-isHMBoxLeaf _                 = False
-
-||| Boolean check that `posChannel` and `negChannel` share zero active keys.
-public export
-disjointDualSupports : MultisetWeight c => DualChannelView c -> Bool
-disjointDualSupports (MkDualChannels p n) = isHMBoxLeaf (hadamardHMSet p n)
 
 ------------------------------------------------------------------------
 -- 3. STREAMING PEEL-WORK REDUCTIONS (`Time = Peeling Work`)

@@ -114,6 +114,11 @@ public export
 Show QuadraticTriple where
   show t = "QuadraticTriple(" ++ show t.qtA ++ ", " ++ show t.qtB ++ ", " ++ show t.qtR ++ ")"
 
+||| Sterling recognition predicate certifying `qtR > 0` and `qtA^2 + qtB^2 == qtR^2`.
+public export
+isQuadraticTriple : QuadraticTriple -> Bool
+isQuadraticTriple t = t.qtR > 0 && (t.qtA * t.qtA + t.qtB * t.qtB == t.qtR * t.qtR)
+
 ||| Generates the elementary Pythagorean triple `(m^2 - 1, 2m, m^2 + 1)` for `m >= 2`.
 public export
 pythGeneratorTriple : BoxInt -> QuadraticTriple
