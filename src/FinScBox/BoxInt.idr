@@ -141,9 +141,14 @@ Integral BoxInt where
   div = divBox
   mod = modBox
 
+||| Absolute value of a `BoxInt` as a `BoxInt`.
+%inline public export
+absBox : BoxInt -> BoxInt
+absBox (MkBoxInt v) = MkBoxInt (if v < 0 then -v else v)
+
 public export
 Abs BoxInt where
-  abs (MkBoxInt v) = MkBoxInt (case v < 0 of True => -v; False => v)
+  abs = absBox
 
 public export
 Cast Nat BoxInt where
@@ -166,11 +171,6 @@ boxToNat (MkBoxInt v) = if v <= 0 then 0 else integerToNat v
 public export
 Cast BoxInt Nat where
   cast = boxToNat
-
-||| Absolute value of a `BoxInt` as a `BoxInt`.
-%inline public export
-absBox : BoxInt -> BoxInt
-absBox (MkBoxInt v) = MkBoxInt (if v < 0 then -v else v)
 
 %inline public export
 Eq BoxInt where

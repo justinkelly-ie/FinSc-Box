@@ -137,19 +137,23 @@ public export
 Monoid QuadraticTriple where
   neutral = MkQuadraticTriple 1 0 1
 
-||| Computes the `y`-th composite Pythagorean triple `(A_y, B_y, R_y) = (A_1 + i B_1)^y`
-||| whose spread is the exact `y`-fold spread polynomial `S_y(s(m)) = Z_y(4 s(m)) / 4`.
+||| Raises any `QuadraticTriple` to the `y`-th Gaussian power in the `QuadraticTriple` `Monoid`.
 public export
-pythPowerTriple : (y : Nat) -> (m : BoxInt) -> QuadraticTriple
-pythPowerTriple Z           _ = neutral
-pythPowerTriple (S Z)       m = pythGeneratorTriple m
-pythPowerTriple (S (S rem)) m =
-  let base = pythGeneratorTriple m
-  in go rem base base
+powQuadraticTriple : Nat -> QuadraticTriple -> QuadraticTriple
+powQuadraticTriple Z           _    = neutral
+powQuadraticTriple (S Z)       base = base
+powQuadraticTriple (S (S rem)) base = go rem base base
   where
     go : Nat -> QuadraticTriple -> QuadraticTriple -> QuadraticTriple
     go Z     step acc = acc <+> step
     go (S k) step acc = go k step (acc <+> step)
+
+||| Computes the `y`-th composite Pythagorean triple `(A_y, B_y, R_y) = (A_1 + i B_1)^y`
+||| whose spread is the exact `y`-fold spread polynomial `S_y(s(m)) = Z_y(4 s(m)) / 4`.
+public export
+pythPowerTriple : (y : Nat) -> (m : BoxInt) -> QuadraticTriple
+pythPowerTriple Z       _ = neutral
+pythPowerTriple y@(S _) m = powQuadraticTriple y (pythGeneratorTriple m)
 
 ||| Applies a local 2-body integer quadratic exchange specified by `MkQuadraticTriple aCoef bCoef rDen` (`a^2 + b^2 = r^2`)
 ||| to `(pA, pB, u)`, preserving `pA + pB` identically and monotonically bounding `2*(pA^2 + pB^2) + u^2`.

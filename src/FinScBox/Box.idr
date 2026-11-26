@@ -216,6 +216,18 @@ allBox : (k -> c -> Bool) -> Box c k -> Bool
 allBox _ BoxLeaf             = True
 allBox p (BoxNode _ l k w r) = p k w && allBox p l && allBox p r
 
+||| Short-circuiting in-order search returning the first `Just` result in `Box c k`.
+public export
+findBox : (k -> c -> Maybe r) -> Box c k -> Maybe r
+findBox _ BoxLeaf = Nothing
+findBox f (BoxNode _ l k w r) =
+  case findBox f l of
+    Just res => Just res
+    Nothing  =>
+      case f k w of
+        Just res => Just res
+        Nothing  => findBox f r
+
 ||| Maps a weight function over `Box c k` and prunes any resulting `zeroWeight` entries.
 public export
 mapPruneBox : (Ord k, MultisetWeight d) => (c -> d) -> Box c k -> Box d k
@@ -312,12 +324,16 @@ public export
 negateBox : MultisetWeight c => Box c k -> Box c k
 negateBox = mapBoxWeight negWeight
 
-||| Exact pointwise superposition/sum of two `Box c k` structures (`A + B`), pruning zeros.
+||| Exact pointwise superposition/sum of two `Box c k` structures (`A + B`), pruning zeros
+||| and folding over the smaller-height tree (`O(min(N, M) log(N + M))`).
 public export
 unionBox : (Ord k, MultisetWeight c) => Box c k -> Box c k -> Box c k
 unionBox BoxLeaf t2 = t2
 unionBox t1 BoxLeaf = t1
-unionBox t1 t2 = foldBox (\k, w, acc => addAtKeyBox k w acc) t1 t2
+unionBox t1 t2 =
+  if boxHeight t1 >= boxHeight t2
+    then foldBox (\k, w, acc => addAtKeyBox k w acc) t1 t2
+    else foldBox (\k, w, acc => addAtKeyBox k w acc) t2 t1
 
 ||| Pointwise difference of two `Box c k` structures (`A - B`), pruning zeros.
 public export
@@ -342,10 +358,15 @@ filterBox : (Ord k, MultisetWeight c) => (k -> Bool) -> Box c k -> Box c k
 filterBox p t =
   foldBox (\k, w, acc => if p k then setBox k w acc else acc) BoxLeaf t
 
+||| Cross-carrier unit-weight support projection (`oneWeight {c=d}` on every non-zero key, zeros pruned).
+public export
+projectSupportBox : (Ord k, MultisetWeight c, MultisetWeight d) => Box c k -> Box d k
+projectSupportBox = mapPruneBox (\w => if isZero w then zeroWeight else oneWeight)
+
 ||| Unsigned support indicator (`oneWeight` on every non-zero key, `zeroWeight` pruned).
 public export
-supportBox : MultisetWeight c => Box c k -> Box c k
-supportBox = mapBoxWeight (\w => if isZero w then zeroWeight else oneWeight)
+supportBox : (Ord k, MultisetWeight c) => Box c k -> Box c k
+supportBox = projectSupportBox
 
 ||| Single-pass partition of `Box c k` into `(matching, nonMatching)` by key predicate.
 public export
@@ -355,12 +376,15 @@ partitionBox p t =
              if p k then (setBox k w yesB, noB) else (yesB, setBox k w noB))
           (BoxLeaf, BoxLeaf) t
 
-||| Retains entries of `t` whose keys are non-zero in `mask`.
+||| Retains entries of `t` whose keys are non-zero in `mask`, folding over the smaller-height tree.
 public export
 maskByBox : (Ord k, MultisetWeight c, MultisetWeight d) => Box c k -> Box d k -> Box c k
 maskByBox BoxLeaf _ = BoxLeaf
 maskByBox _ BoxLeaf = BoxLeaf
-maskByBox t mask = filterBox (\k => not (isZero (lookupBox k mask))) t
+maskByBox t mask =
+  if boxHeight t <= boxHeight mask
+    then filterBox (\k => not (isZero (lookupBox k mask))) t
+    else foldBox (\k, mw, acc => if isZero mw then acc else setBox k (lookupBox k t) acc) BoxLeaf mask
 
 ||| Retains entries of `t` whose keys are zero (absent) in `mask`.
 public export
@@ -369,18 +393,22 @@ maskOutBox BoxLeaf t = t
 maskOutBox _ BoxLeaf = BoxLeaf
 maskOutBox mask t = filterBox (\k => isZero (lookupBox k mask)) t
 
-||| Pointwise Hadamard product (`A .*. B`) on `Box c k`.
+||| Pointwise Hadamard product (`A .*. B`) on `Box c k`, folding over the smaller-height tree
+||| while preserving `mulWeight w1 w2` operand order.
 public export
 hadamardBox : (Ord k, MultisetWeight c) => Box c k -> Box c k -> Box c k
 hadamardBox BoxLeaf _ = BoxLeaf
 hadamardBox _ BoxLeaf = BoxLeaf
 hadamardBox t1 t2 =
-  foldBox (\k, w1, acc =>
-             let w2   = lookupBox k t2
-                 prod = mulWeight w1 w2
-             in if isZero prod then acc else setBox k prod acc)
-          BoxLeaf
-          t1
+  if boxHeight t1 <= boxHeight t2
+    then foldBox (\k, w1, acc =>
+                    let prod = mulWeight w1 (lookupBox k t2)
+                    in if isZero prod then acc else setBox k prod acc)
+                 BoxLeaf t1
+    else foldBox (\k, w2, acc =>
+                    let prod = mulWeight (lookupBox k t1) w2
+                    in if isZero prod then acc else setBox k prod acc)
+                 BoxLeaf t2
 
 ||| Combined zero-pruning pointwise envelope for two `Box c k` structures.
 public export
@@ -400,17 +428,16 @@ zipZeroWeightBox op t1 t2 =
              step1
              t2
 
-||| Canonical inner product (`A <.> B`) returning scalar multiplicity weight `c`.
+||| Canonical inner product (`A <.> B`) returning scalar multiplicity weight `c`,
+||| folding over the smaller-height tree while preserving `mulWeight w1 w2` operand order.
 public export
 dotBox : (Ord k, MultisetWeight c) => Box c k -> Box c k -> c
 dotBox BoxLeaf _ = zeroWeight
 dotBox _ BoxLeaf = zeroWeight
 dotBox t1 t2 =
-  foldBox (\k, w1, acc =>
-             let w2 = lookupBox k t2
-             in addWeight acc (mulWeight w1 w2))
-          zeroWeight
-          t1
+  if boxHeight t1 <= boxHeight t2
+    then foldBox (\k, w1, acc => addWeight acc (mulWeight w1 (lookupBox k t2))) zeroWeight t1
+    else foldBox (\k, w2, acc => addWeight acc (mulWeight (lookupBox k t1) w2)) zeroWeight t2
 
 ||| Generalized all-pairs box multiplication (`pairBoxWith`):
 ||| Pairs every active `(k1, w1)` in `t1` with every active `(k2, w2)` in `t2`,
@@ -498,11 +525,7 @@ traceBox m =
 ||| Diagonal projection mask: retains only entries on the coincidence diagonal a1 == a2.
 public export
 diagMaskBox : (Ord a, MultisetWeight c) => Box c (a, a) -> Box c (a, a)
-diagMaskBox BoxLeaf = BoxLeaf
-diagMaskBox m =
-  foldBox (\(x, y), w, acc =>
-            if x == y then addAtKeyBox (x, y) w acc else acc)
-          BoxLeaf m
+diagMaskBox = filterBox (\(x, y) => x == y)
 
 ||| Antisymmetric directed-edge Maxel singleton: `w * ([a, b] - [b, a])` (`a /= b`).
 ||| Guarantees `transposeBox == negateBox` and `totalMassBox == zeroWeight`.
@@ -592,6 +615,14 @@ public export
   m1 == m2 = m1.rawMaxelBox == m2.rawMaxelBox
 
 public export
+(Ord a, Ord b, MultisetWeight c) => Ord (Maxel c a b form) where
+  compare m1 m2 = compare m1.rawMaxelBox m2.rawMaxelBox
+
+public export
+(Show a, Show b, Show c) => Show (Maxel c a b form) where
+  show m = "Maxel(" ++ show (toAscListBox m.rawMaxelBox) ++ ")"
+
+public export
 emptyMaxel : Maxel c a b form
 emptyMaxel = MkMaxel BoxLeaf
 
@@ -644,6 +675,12 @@ contractRMaxel (MkMaxel m) = contractRBox m
 public export
 contractLMaxel : (Ord b, MultisetWeight c) => Maxel c a b GeneralForm -> Box c b
 contractLMaxel (MkMaxel m) = contractLBox m
+
+||| Relational / matrix composition `[a, b1] * [b2, d] -> [a, d]` (`b1 == b2`) on `GeneralForm` Maxels.
+public export
+composeMaxel : (Ord a, Ord b, Ord d, MultisetWeight c) =>
+               Maxel c a b GeneralForm -> Maxel c b d GeneralForm -> Maxel c a d GeneralForm
+composeMaxel (MkMaxel m1) (MkMaxel m2) = MkMaxel (composeBox m1 m2)
 
 public export
 lookupHalfBox : Ord k => MultisetWeight c => (allowDiag, antisymOff : Bool) -> k -> k -> Box c (k, k) -> c
@@ -787,26 +824,20 @@ diagEmbedMaxel : (Ord k, MultisetWeight c) => Box c k -> Maxel c k k SymForm
 diagEmbedMaxel b = MkMaxel (diagEmbedBox b)
 
 public export
+expandHalfBox : Ord k => MultisetWeight c => Bool -> (c -> c) -> Box c (k, k) -> Box c (k, k)
+expandHalfBox allowDiag oppFn =
+  foldBox (\(x, y), w, acc =>
+             if x == y
+               then if allowDiag then addAtKeyBox (x, x) w acc else acc
+               else addAtKeyBox (y, x) (oppFn w) (addAtKeyBox (x, y) w acc))
+          BoxLeaf
+
+public export
 toGeneralMaxel : Ord k => MultisetWeight c => {form : MaxelForm k k} -> Maxel c k k form -> Maxel c k k GeneralForm
-toGeneralMaxel {form = GeneralForm} m = m
-toGeneralMaxel {form = SymForm} (MkMaxel m) =
-  MkMaxel $ foldBox (\(x, y), w, acc =>
-                       if x == y
-                         then addAtKeyBox (x, x) w acc
-                         else addAtKeyBox (y, x) w (addAtKeyBox (x, y) w acc))
-                    BoxLeaf m
-toGeneralMaxel {form = AntisymForm} (MkMaxel m) =
-  MkMaxel $ foldBox (\(x, y), w, acc =>
-                       if x == y
-                         then acc
-                         else addAtKeyBox (y, x) (negWeight w) (addAtKeyBox (x, y) w acc))
-                    BoxLeaf m
-toGeneralMaxel {form = DiagAntisymForm} (MkMaxel m) =
-  MkMaxel $ foldBox (\(x, y), w, acc =>
-                       if x == y
-                         then addAtKeyBox (x, x) w acc
-                         else addAtKeyBox (y, x) (negWeight w) (addAtKeyBox (x, y) w acc))
-                    BoxLeaf m
+toGeneralMaxel {form = GeneralForm}     m           = m
+toGeneralMaxel {form = SymForm}         (MkMaxel m) = MkMaxel (expandHalfBox True  id        m)
+toGeneralMaxel {form = AntisymForm}     (MkMaxel m) = MkMaxel (expandHalfBox False negWeight m)
+toGeneralMaxel {form = DiagAntisymForm} (MkMaxel m) = MkMaxel (expandHalfBox True  negWeight m)
 
 ||| Decides whether the full square expansion of `m` is symmetric (`M^T == M`).
 public export
@@ -854,24 +885,8 @@ hadamardMaxelByTag TagAntisym TagGeneral m1 (MkMaxel m2) =
   MkMaxel (hadamardSameBox @{ordA} @{mw} (toGeneralMaxel @{ordA} @{mw} {form = AntisymForm} m1).rawMaxelBox m2)
 hadamardMaxelByTag TagDiagAntisym TagGeneral m1 (MkMaxel m2) =
   MkMaxel (hadamardSameBox @{ordA} @{mw} (toGeneralMaxel @{ordA} @{mw} {form = DiagAntisymForm} m1).rawMaxelBox m2)
-hadamardMaxelByTag TagSym TagSym (MkMaxel m1) (MkMaxel m2) =
-  MkMaxel (hadamardSameBox @{ordA} @{mw} m1 m2)
-hadamardMaxelByTag TagAntisym TagAntisym (MkMaxel m1) (MkMaxel m2) =
-  MkMaxel (hadamardSameBox @{ordA} @{mw} m1 m2)
-hadamardMaxelByTag TagDiagAntisym TagDiagAntisym (MkMaxel m1) (MkMaxel m2) =
-  MkMaxel (hadamardSameBox @{ordA} @{mw} m1 m2)
-hadamardMaxelByTag TagAntisym TagDiagAntisym (MkMaxel m1) (MkMaxel m2) =
-  MkMaxel (hadamardSameBox @{ordA} @{mw} m1 m2)
-hadamardMaxelByTag TagDiagAntisym TagAntisym (MkMaxel m1) (MkMaxel m2) =
-  MkMaxel (hadamardSameBox @{ordA} @{mw} m1 m2)
-hadamardMaxelByTag TagSym TagAntisym (MkMaxel m1) (MkMaxel m2) =
-  MkMaxel (hadamardSameBox @{ordA} @{mw} m1 m2)
-hadamardMaxelByTag TagAntisym TagSym (MkMaxel m1) (MkMaxel m2) =
-  MkMaxel (hadamardSameBox @{ordA} @{mw} m1 m2)
-hadamardMaxelByTag TagSym TagDiagAntisym (MkMaxel m1) (MkMaxel m2) =
-  MkMaxel (hadamardSameBox @{ordA} @{mw} m1 m2)
-hadamardMaxelByTag TagDiagAntisym TagSym (MkMaxel m1) (MkMaxel m2) =
-  MkMaxel (hadamardSameBox @{ordA} @{mw} m1 m2)
+hadamardMaxelByTag _ _ (MkMaxel m1) (MkMaxel m2) =
+  MkMaxel (hadamardBox m1 m2)
 
 public export
 hadamardMaxel :
@@ -1030,7 +1045,7 @@ MonoidCoord k => Num (Box BoxInt k) where
 
 public export
 MonoidCoord k => Neg (Box BoxInt k) where
-  negate = scaleBox (MkBoxInt (-1))
+  negate = negateBox
   (-) = subBox
 
 public export

@@ -418,13 +418,6 @@ signedToBoxInt (PosZ k) = MkBoxInt (natToInteger (S k))
 signedToBoxInt (NegZ k) = MkBoxInt (negate (natToInteger (S k)))
 
 public export
-boxIntToSigned : BoxInt -> SignedCoord
-boxIntToSigned (MkBoxInt v) =
-  if v == 0 then ZeroZ
-  else if v > 0 then PosZ (cast (v - 1))
-  else NegZ (cast ((-v) - 1))
-
-public export
 intToSigned : Integer -> SignedCoord
 intToSigned v =
   if v == 0 then ZeroZ
@@ -432,7 +425,25 @@ intToSigned v =
   else NegZ (integerToNat ((-v) - 1))
 
 public export
+boxIntToSigned : BoxInt -> SignedCoord
+boxIntToSigned (MkBoxInt v) = intToSigned v
+
+public export
+Cast SignedCoord BoxInt where
+  cast = signedToBoxInt
+
+public export
+Cast BoxInt SignedCoord where
+  cast = boxIntToSigned
+
+public export
+isEvenNat : Nat -> Bool
+isEvenNat Z         = True
+isEvenNat (S Z)     = False
+isEvenNat (S (S k)) = isEvenNat k
+
+public export
 isOddSigned : SignedCoord -> Bool
 isOddSigned ZeroZ    = False
-isOddSigned (PosZ k) = isOddBox (MkBoxInt (natToInteger (S k)))
-isOddSigned (NegZ k) = isOddBox (MkBoxInt (natToInteger (S k)))
+isOddSigned (PosZ k) = isEvenNat k
+isOddSigned (NegZ k) = isEvenNat k
