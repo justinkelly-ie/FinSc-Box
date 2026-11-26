@@ -846,13 +846,6 @@ hadamardMaxelByTag t1 t2 m1 m2 = go @{ordA} @{ordB} t1 t2 m1 m2
     go TagDiagAntisym TagSym         (MkMaxel x1) (MkMaxel x2) = MkMaxel (hadKK @{ox} x1 x2)
 
 public export
-hadamardMaxel :
-  {auto ordA : Ord a} -> {auto ordB : Ord b} -> {auto mw : MultisetWeight c} ->
-  {0 f1, f2 : MaxelForm a b} -> (KnownMaxelForm f1, KnownMaxelForm f2) =>
-  Maxel c a b f1 -> Maxel c a b f2 -> Maxel c a b (hadamardMaxelForm f1 f2)
-hadamardMaxel = hadamardMaxelByTag @{ordA} @{ordB} @{mw} maxelFormTag maxelFormTag
-
-public export
 shiftConvolveMaxel :
   (MonoidCoord k, MultisetWeight c) =>
   {form : MaxelForm k k} ->
@@ -884,26 +877,22 @@ unitStencilBox stepFn =
              in addAtKeyBox (inverse d) oneWeight (addAtKeyBox d oneWeight acc))
           BoxLeaf
 
-||| Retains strictly entries whose magnitude meets `minCut` (for sparse series pruning).
-public export
-pruneMinBox : Ord k => Integer -> Box BoxInt k -> Box BoxInt k
-pruneMinBox minCut b =
-  if minCut <= 1
-    then b
-    else mapPruneBox (\w@(MkBoxInt v) => if abs v >= minCut then w else zeroWeight) b
-
 ||| Divides all entries of a `Box BoxInt k` symmetrically by `den` and prunes values below `minCut`.
 public export
 scaleDivPruneBox : Ord k => (den, minCut : Integer) -> Box BoxInt k -> Box BoxInt k
 scaleDivPruneBox den minCut b =
   if den <= 0
     then BoxLeaf
-    else mapPruneBox (\w => let q@(MkBoxInt qv) = tdivPosBox w den
-                            in if abs qv >= minCut then q else zeroWeight) b
+    else if den == 1
+      then if minCut <= 1
+             then b
+             else mapPruneBox (\w@(MkBoxInt v) => if abs v >= minCut then w else zeroWeight) b
+      else mapPruneBox (\w => let q@(MkBoxInt qv) = tdivPosBox w den
+                              in if abs qv >= minCut then q else zeroWeight) b
 
 public export
 pruneMinMaxel : (Ord a, Ord b) => Integer -> Maxel BoxInt a b form -> Maxel BoxInt a b form
-pruneMinMaxel minCut (MkMaxel m) = MkMaxel (pruneMinBox minCut m)
+pruneMinMaxel minCut (MkMaxel m) = MkMaxel (scaleDivPruneBox 1 minCut m)
 
 public export
 scaleDivPruneMaxel : (Ord a, Ord b) => (den, minCut : Integer) -> Maxel BoxInt a b form -> Maxel BoxInt a b form
@@ -965,7 +954,7 @@ isAntisymMaxel m = let g = toGeneralMaxel m in transposeMaxel g == negM g
 public export
 (Ord a, Ord b, MultisetWeight c, KnownMaxelForm f1, KnownMaxelForm f2) =>
 MultisetHadamard (Maxel c a b f1) (Maxel c a b f2) (Maxel c a b (hadamardMaxelForm f1 f2)) where
-  (.*.) = hadamardMaxel
+  (.*.) = hadamardMaxelByTag maxelFormTag maxelFormTag
 
 public export
 MonoidCoord k => Num (Box BoxInt k) where
