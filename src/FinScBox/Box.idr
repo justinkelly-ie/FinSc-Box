@@ -1020,6 +1020,7 @@ public export
 isCanonicalBox : MultisetWeight c => Ord k => Box c k -> Bool
 isCanonicalBox = isCanonicalBoxBy (\_ => True)
 
+public export
 checkPairBox :
   {auto ordA : Ord a} -> {auto ordB : Ord b} -> {auto mw : MultisetWeight c} ->
   ((a, b) -> Bool) -> Box c (a, b) -> Bool
