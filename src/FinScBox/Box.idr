@@ -24,7 +24,7 @@ boxHeight : Box c k -> Nat
 boxHeight BoxLeaf              = Z
 boxHeight (BoxNode h _ _ _ _)  = h
 
-||| Exact structural node count (non-zero entry bound) for `GohFuel` and zipper termination.
+||| Exact structural node count (non-zero entry bound) for `GohBound` and zipper termination.
 public export
 boxNodeCount : Box c k -> Nat
 boxNodeCount BoxLeaf             = Z

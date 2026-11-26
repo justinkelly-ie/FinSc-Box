@@ -477,7 +477,7 @@ toCanonicalHMSet m =
     No _    => Nothing
 
 ------------------------------------------------------------------------
--- 6. INTRINSIC `GohFuel` DERIVATION & SELF-FUELING ON `HereditaryMSet c`
+-- 6. INTRINSIC `GohBound` DERIVATION & SELF-BOUNDING ON `HereditaryMSet c`
 ------------------------------------------------------------------------
 
 ||| Backward-or-stay half-step dipole (`alpha^(-1) + 1`) as a `PureMultiset`.
@@ -522,52 +522,52 @@ half Z         = Z
 half (S Z)     = Z
 half (S (S k)) = S (half k)
 
-||| Monomorphic maximum on inductive Peano `Nat` for fuel envelopes.
+||| Monomorphic maximum on inductive Peano `Nat` for horizon bounds.
 public export
-fuelMax : Nat -> Nat -> Nat
-fuelMax Z b         = b
-fuelMax a Z         = a
-fuelMax (S a) (S b) = S (fuelMax a b)
+boundMax : Nat -> Nat -> Nat
+boundMax Z b         = b
+boundMax a Z         = a
+boundMax (S a) (S b) = S (boundMax a b)
 
-||| Canonical Goh factorisation formula computing exact fuel steps natively in `Nat`:
-||| `Fuel(S k) = S k + floor(k/2) + elementaryPolarityCount` (e.g. `Fuel(210) = 316`).
+||| Canonical Goh factorisation formula computing exact bound steps natively in `Nat`:
+||| `Bound(S k) = S k + floor(k/2) + elementaryPolarityCount` (e.g. `Bound(210) = 316`).
 public export
-gohFuelNat : Nat -> Nat
-gohFuelNat Z     = S Z
-gohFuelNat (S k) = S k + half k + elementaryPolarityCount
+gohBoundNat : Nat -> Nat
+gohBoundNat Z     = S Z
+gohBoundNat (S k) = S k + half k + elementaryPolarityCount
 
-||| First-class constructivist Goh Fuel indexed directly by model capacity.
+||| First-class constructivist Goh bound indexed directly by model capacity.
 public export
-record GohFuel (0 capacity : Nat) where
-  constructor MkGohFuel
-  fuelSteps : Nat
+record GohBound (0 capacity : Nat) where
+  constructor MkGohBound
+  boundSteps : Nat
 
-||| Constructs a direct runtime `GohFuel 0` quota without inflating compile-time phantom `capacity`.
+||| Constructs a direct runtime `GohBound 0` quota without inflating compile-time phantom `capacity`.
 public export
-mkGohFuel : Nat -> GohFuel 0
-mkGohFuel s = MkGohFuel s
-
-public export
-Eq (GohFuel cap) where
-  (MkGohFuel s1) == (MkGohFuel s2) = s1 == s2
+mkGohBound : Nat -> GohBound 0
+mkGohBound s = MkGohBound s
 
 public export
-Show (GohFuel cap) where
-  show (MkGohFuel s) = "GohFuel(" ++ show s ++ " steps)"
+Eq (GohBound cap) where
+  (MkGohBound s1) == (MkGohBound s2) = s1 == s2
 
-||| Existential model-indexed `GohFuel` envelope for streams whose active capacity is
+public export
+Show (GohBound cap) where
+  show (MkGohBound s) = "GohBound(" ++ show s ++ " steps)"
+
+||| Existential model-indexed `GohBound` envelope for streams whose active capacity is
 ||| derived dynamically from a `HereditaryMSet c` support summary.
 public export
-data AnyGohFuel : Type where
-  MkAnyGohFuel : (capacity : Nat) -> GohFuel capacity -> AnyGohFuel
+data AnyGohBound : Type where
+  MkAnyGohBound : (capacity : Nat) -> GohBound capacity -> AnyGohBound
 
 public export
-Eq AnyGohFuel where
-  (MkAnyGohFuel c1 f1) == (MkAnyGohFuel c2 f2) = c1 == c2 && f1.fuelSteps == f2.fuelSteps
+Eq AnyGohBound where
+  (MkAnyGohBound c1 b1) == (MkAnyGohBound c2 b2) = c1 == c2 && b1.boundSteps == b2.boundSteps
 
 public export
-Show AnyGohFuel where
-  show (MkAnyGohFuel cap gf) = "AnyGohFuel(cap=" ++ show cap ++ ", steps=" ++ show gf.fuelSteps ++ ")"
+Show AnyGohBound where
+  show (MkAnyGohBound cap gb) = "AnyGohBound(cap=" ++ show cap ++ ", steps=" ++ show gb.boundSteps ++ ")"
 
 ||| Single-pass invariants extracted polymorphically from any `HereditaryMSet c`:
 ||| - `nnz`       : Support cardinality `chi_Supp(1)` (non-zero entries)
@@ -594,8 +594,8 @@ maxWeightInBox (S rem) box = goBox box
     goBox : Box c (HereditaryMSet c) -> Nat
     goBox BoxLeaf = 0
     goBox (BoxNode _ l (MkHMSet sub) w r) =
-      let here = fuelMax (weightMagnitude w) (maxWeightInBox rem sub)
-      in fuelMax (goBox l) (fuelMax here (goBox r))
+      let here = boundMax (weightMagnitude w) (maxWeightInBox rem sub)
+      in boundMax (goBox l) (boundMax here (goBox r))
 
 ||| Polymorphic single-pass AVL fold updating `nnz`, `totalMass`, and `maxDeg` across
 ||| any `MultisetWeight c` carrier (`BoxInt`, `SignedBit`, or `MultisetBit`).
@@ -610,25 +610,25 @@ collectSupportStats (BoxNode _ left (MkHMSet innerBox) w right) =
                      BoxLeaf => 0
                      BoxNode _ BoxLeaf (MkHMSet BoxLeaf) expW BoxLeaf =>
                        weightMagnitude expW
-                     _ => fuelMax (boxHeight innerBox) (maxWeightInBox (boxNestedDepth innerBox) innerBox)
+                     _ => boundMax (boxHeight innerBox) (maxWeightInBox (boxNestedDepth innerBox) innerBox)
       selfNnz    = the Nat (if isZero w then 0 else 1)
       mergedNnz  = lStats.nnz + selfNnz + rStats.nnz
       mergedMass = lStats.totalMass + absW + rStats.totalMass
-      mergedMax  = fuelMax lStats.maxDeg (fuelMax childDeg rStats.maxDeg)
+      mergedMax  = boundMax lStats.maxDeg (boundMax childDeg rStats.maxDeg)
   in MkSupportStats mergedNnz mergedMass mergedMax
 
-||| Uncapped intrinsic self-fuel extractor deriving `cap = nnz + S maxDeg` directly
+||| Uncapped intrinsic self-bound extractor deriving `cap = nnz + S maxDeg` directly
 ||| from a `HereditaryMSet c` without requiring an external capacity ceiling.
 public export
-selfFuelOfHMSet : MultisetWeight c => HereditaryMSet c -> (AnyGohFuel, Nat)
-selfFuelOfHMSet (MkHMSet rootBox) =
+selfBoundOfHMSet : MultisetWeight c => HereditaryMSet c -> (AnyGohBound, Nat)
+selfBoundOfHMSet (MkHMSet rootBox) =
   let treeBound  = fastNatPower2 (boxHeight rootBox)
       stats      = collectSupportStats rootBox
       cap        = stats.nnz + S stats.maxDeg
-      ySteps     = gohFuelNat cap
-      yieldFuel  = MkGohFuel ySteps
+      ySteps     = gohBoundNat cap
+      yieldBound = MkGohBound ySteps
       stepBudget = ySteps + treeBound + stats.nnz
-  in (MkAnyGohFuel cap yieldFuel, stepBudget)
+  in (MkAnyGohBound cap yieldBound, stepBudget)
 
 ------------------------------------------------------------------------
 -- 7. TIME HORIZONS OVER THE INTEGER AXIS Z
@@ -639,9 +639,9 @@ public export
 data Time : Type where
   ||| 1. Fixed compact interval [low, high] known at compile time
   StaticTime     : (low : Integer) -> (high : Integer) -> Time
-  ||| 2. Forward causal ray [0, cap] governed by runtime `GohFuel`
+  ||| 2. Forward causal ray [0, cap] governed by runtime `GohBound`
   BoundedTime    : (cap : Nat) -> Time
-  ||| 3. Backward UV ray [-cap, 0] governed by runtime `GohFuel`
+  ||| 3. Backward UV ray [-cap, 0] governed by runtime `GohBound`
   RetroTime      : (cap : Nat) -> Time
   ||| 4. Sliding causal interval [t - win, t] of fixed width `win`
   WindowedTime   : (win : Nat) -> Time
@@ -676,9 +676,9 @@ Show Time where
 ||| What happens at a single tick `n` of a TimeStream:
 ||| - `StreamDone`  : Stream has naturally terminated (quiescent completion)
 ||| - `StreamSkip`  : Vacuum annihilation (`[+1, -1] = []`) or silent tick
-|||                   (consumes 1 `stepBudget`, 0 `GohFuel`)
+|||                   (consumes 1 `stepBudget`, 0 `GohBound`)
 ||| - `StreamYield` : Emits an active multiset term/delta
-|||                   (consumes 1 `stepBudget` and `yieldCost` of `GohFuel`)
+|||                   (consumes 1 `stepBudget` and `yieldCost` of `GohBound`)
 public export
 data StreamStep : (a : Type) -> Type where
   StreamDone  : StreamStep a
@@ -726,11 +726,11 @@ paceStreamStep budget load (MkBoxInt b) =
            else (StreamSkip, MkBoxInt (b - budget))
 
 ------------------------------------------------------------------------
--- 9. FUEL EXHAUSTION & TIME-HORIZON FREEZE-OUT
+-- 9. BOUND EXHAUSTION & TIME-HORIZON FREEZE-OUT
 ------------------------------------------------------------------------
 
 ||| Termination classification when a `TimeStream` halts and freezes out into `StaticTime`:
-||| - `YieldExhausted`     : Yield quota (`GohFuel cap`) reached 0
+||| - `YieldExhausted`     : Yield quota (`GohBound cap`) reached 0
 ||| - `StepHorizonReached` : Step horizon (`stepBudget`) reached 0 while yield remained
 ||| - `NaturalCompletion`  : Stream emitted `StreamDone` before exhausting either budget
 public export
@@ -752,7 +752,7 @@ Show StreamFreezeReason where
   show StepHorizonReached = "StepHorizonReached"
   show NaturalCompletion  = "NaturalCompletion"
 
-||| Certified static relic produced when a dynamic `TimeStream` runs out of fuel
+||| Certified static relic produced when a dynamic `TimeStream` exhausts its bound
 ||| or completes at retrograde depth `g` (`RetroTime g`) and capacity `cap` (`BoundedTime cap`).
 ||| Its phantom Time index transitions to `StaticTime (- cast g) (cast cap)`.
 public export
@@ -763,7 +763,7 @@ record SolidifiedStream (0 frozenTime : Time) (0 cap : Nat) (a : Type) where
   freezeTick     : Nat
   yieldsConsumed : Nat
   stepsConsumed  : Nat
-  remainingYield : GohFuel cap
+  remainingYield : GohBound cap
   remainingSteps : Nat
 
 public export
@@ -778,35 +778,35 @@ public export
 ||| Stateful Streaming Freeze-Out Evaluator over an initial state `initA : a` populated at `t = 0`:
 ||| At each tick, `stepFn acc` emits `(StreamStep a, yieldCost, skipsSaved)`:
 ||| - `StreamDone`      : natural termination (`NaturalCompletion`)
-||| - `StreamSkip`      : consumes `0` `yieldFuel` and `1` `stepBudget`, banking `skipsSaved`
+||| - `StreamSkip`      : consumes `0` `yieldBound` and `1` `stepBudget`, banking `skipsSaved`
 ||| - `StreamYield nxt` : if `remYield < yieldCost`, freezes out with `YieldExhausted`;
-|||                       otherwise consumes `yieldCost` of `yieldFuel` and `1` `stepBudget`.
+|||                       otherwise consumes `yieldCost` of `yieldBound` and `1` `stepBudget`.
 public export
 freezeStateStreamWith :
   {0 cap     : Nat} ->
   (g          : Nat) ->
-  (yieldFuel  : GohFuel cap) ->
+  (yieldBound : GohBound cap) ->
   (stepBudget : Nat) ->
   (stepFn     : a -> (StreamStep a, Nat, Nat)) ->
   (initA      : a) ->
   (SolidifiedStream (StaticTime (- cast g) (cast cap)) cap a, Nat)
-freezeStateStreamWith g yieldFuel stepBudget stepFn initA =
-  loop yieldFuel.fuelSteps stepBudget 0 0 0 0 initA
+freezeStateStreamWith g yieldBound stepBudget stepFn initA =
+  loop yieldBound.boundSteps stepBudget 0 0 0 0 initA
   where
     loop : (yRem, sRem, currTick, yUsed, sUsed, skAcc : Nat) ->
            (acc : a) ->
            (SolidifiedStream (StaticTime (- cast g) (cast cap)) cap a, Nat)
     loop yRem Z currTick yUsed sUsed skAcc acc =
-      (MkSolidifiedStream acc StepHorizonReached currTick yUsed sUsed (MkGohFuel yRem) 0, skAcc)
+      (MkSolidifiedStream acc StepHorizonReached currTick yUsed sUsed (MkGohBound yRem) 0, skAcc)
     loop yRem (S sRem) currTick yUsed sUsed skAcc acc =
       case stepFn acc of
         (StreamDone, _, sk) =>
-          (MkSolidifiedStream acc NaturalCompletion currTick yUsed sUsed (MkGohFuel yRem) (S sRem), skAcc + sk)
+          (MkSolidifiedStream acc NaturalCompletion currTick yUsed sUsed (MkGohBound yRem) (S sRem), skAcc + sk)
         (StreamSkip, _, sk) =>
           loop yRem sRem (S currTick) yUsed (S sUsed) (skAcc + sk) acc
         (StreamYield nxt, yCost, sk) =>
           if yRem < yCost
-            then (MkSolidifiedStream acc YieldExhausted currTick yUsed sUsed (MkGohFuel yRem) (S sRem), skAcc)
+            then (MkSolidifiedStream acc YieldExhausted currTick yUsed sUsed (MkGohBound yRem) (S sRem), skAcc)
             else loop (minus yRem yCost) sRem (S currTick) (yUsed + yCost) (S sUsed) (skAcc + sk) nxt
 
 ||| Decoupled Yield/Step Freeze-Out Evaluator over any `TimeStream t a`,
@@ -816,14 +816,14 @@ freezeTimeStreamWith :
   {0 t   : Time} ->
   {0 cap : Nat} ->
   (g          : Nat) ->
-  (yieldFuel  : GohFuel cap) ->
+  (yieldBound : GohBound cap) ->
   (stepBudget : Nat) ->
   (combine    : a -> a -> a) ->
   (initAcc    : a) ->
   TimeStream t a ->
   SolidifiedStream (StaticTime (- cast g) (cast cap)) cap a
-freezeTimeStreamWith g yieldFuel stepBudget combine initAcc (MkTimeStream start at) =
-  let (r, _) = freezeStateStreamWith g yieldFuel stepBudget
+freezeTimeStreamWith g yieldBound stepBudget combine initAcc (MkTimeStream start at) =
+  let (r, _) = freezeStateStreamWith g yieldBound stepBudget
                  (\(tk, acc) =>
                     case at tk of
                       StreamDone       => (StreamDone, 0, 0)
