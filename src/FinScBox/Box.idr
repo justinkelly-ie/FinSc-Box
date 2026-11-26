@@ -383,24 +383,6 @@ hadamardBox t1 t2 =
                     in if isZero prod then acc else setBox k prod acc)
                  BoxLeaf t2
 
-||| Combined zero-pruning pointwise envelope for two `Box c k` structures.
-public export
-zipZeroWeightBox : (Ord k, MultisetWeight c) => (c -> c -> c) -> Box c k -> Box c k -> Box c k
-zipZeroWeightBox _ BoxLeaf BoxLeaf = BoxLeaf
-zipZeroWeightBox op t1 t2 =
-  let step1 = foldBox (\k, w1, acc =>
-                         let r = op w1 (lookupBox k t2)
-                         in if isZero r then acc else setBox k r acc)
-                      BoxLeaf
-                      t1
-  in foldBox (\k, w2, acc =>
-                if not (isZero (lookupBox k t1))
-                  then acc
-                  else let r = op zeroWeight w2
-                       in if isZero r then acc else setBox k r acc)
-             step1
-             t2
-
 ||| Canonical inner product (`A <.> B`) returning scalar multiplicity weight `c`,
 ||| folding over the smaller-height tree while preserving `mulWeight w1 w2` operand order.
 public export

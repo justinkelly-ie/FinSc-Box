@@ -1,0 +1,4 @@
+[package]
+name = "FinSc-Box"
+version = "0.1.0"
+ipkg = "FinSc-Box.ipkg"

@@ -773,6 +773,17 @@ public export
     s1.remainingYield == s2.remainingYield &&
     s1.remainingSteps == s2.remainingSteps
 
+public export
+Show a => Show (SolidifiedStream t cap a) where
+  show s =
+    "SolidifiedStream(state=" ++ show s.relicState ++
+    ", reason=" ++ show s.freezeReason ++
+    ", tick=" ++ show s.freezeTick ++
+    ", yields=" ++ show s.yieldsConsumed ++
+    ", steps=" ++ show s.stepsConsumed ++
+    ", remYield=" ++ show s.remainingYield ++
+    ", remSteps=" ++ show s.remainingSteps ++ ")"
+
 ||| Stateful Streaming Freeze-Out Evaluator over an initial state `initA : a` populated at `t = 0`:
 ||| At each tick, `stepFn acc` emits `(StreamStep a, yieldCost, skipsSaved)`:
 ||| - `StreamDone`      : natural termination (`NaturalCompletion`)
