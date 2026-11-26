@@ -1,6 +1,8 @@
 module FinScBox.Box
 
 import Data.List
+import public Data.DPair
+import public Data.Maybe
 import public FinScBox.BoxInt
 import public FinScBox.Interfaces
 
@@ -992,14 +994,36 @@ decideBoolTrue : (cond : Bool) -> Dec (cond = True)
 decideBoolTrue True  = Yes Refl
 decideBoolTrue False = No (\case Refl impossible)
 
+||| Polymorphic Sterling `Dec` recognizer lifting any total `Bool` predicate `pred`
+||| into a runtime-decidable dependent witness `Dec (pred x = True)`.
 public export
-checkBoxWithKeyPred :
+recognizeBy : {0 a : Type} -> (pred : a -> Bool) -> (x : a) -> Dec (pred x = True)
+recognizeBy pred x = decideBoolTrue (pred x)
+
+||| Polymorphic smart constructor packing a verified candidate `x` into `Subset`
+||| with an erased `QTT 0` proof `0 snd : pred fst = True`.
+public export
+toSubsetBy : {0 a : Type} -> (pred : a -> Bool) -> (x : a) -> Maybe (Subset a (\v => pred v = True))
+toSubsetBy pred x =
+  case recognizeBy pred x of
+    Yes prf => Just (Element x prf)
+    No _    => Nothing
+
+||| Sterling recognition predicate certifying canonical AVL height, balance,
+||| strict BST key ordering, zero-pruning, and key predicate `keyOk` on `Box c k`.
+public export
+isCanonicalBoxBy : MultisetWeight c => Ord k => (k -> Bool) -> Box c k -> Bool
+isCanonicalBoxBy keyOk m = isJust (checkBoxBoundsBy keyOk m)
+
+||| Sterling recognition predicate certifying canonical AVL invariants and zero-pruning on `Box c k`.
+public export
+isCanonicalBox : MultisetWeight c => Ord k => Box c k -> Bool
+isCanonicalBox = isCanonicalBoxBy (\_ => True)
+
+checkPairBox :
   {auto ordA : Ord a} -> {auto ordB : Ord b} -> {auto mw : MultisetWeight c} ->
   ((a, b) -> Bool) -> Box c (a, b) -> Bool
-checkBoxWithKeyPred p m =
-  case checkBoxBoundsBy p m of
-    Just _  => True
-    Nothing => False
+checkPairBox = isCanonicalBoxBy
 
 ||| Sterling recognition predicate certifying canonical AVL invariants, zero-pruning,
 ||| and `form` half-storage (`x <= y` on `SymForm`/`DiagAntisymForm`, `x < y` on `AntisymForm`).
@@ -1007,10 +1031,10 @@ public export
 isCanonicalMaxel :
   {auto ordA : Ord a} -> {auto ordB : Ord b} -> {auto mw : MultisetWeight c} ->
   {form : MaxelForm a b} -> Maxel c a b form -> Bool
-isCanonicalMaxel {form = GeneralForm}     (MkMaxel m) = checkBoxWithKeyPred @{ordA} @{ordB} @{mw} (\_ => True) m
-isCanonicalMaxel {form = SymForm}         (MkMaxel m) = checkBoxWithKeyPred @{ordA} @{ordA} @{mw} (\(x, y) => compare @{ordA} x y /= GT) m
-isCanonicalMaxel {form = AntisymForm}     (MkMaxel m) = checkBoxWithKeyPred @{ordA} @{ordA} @{mw} (\(x, y) => compare @{ordA} x y == LT) m
-isCanonicalMaxel {form = DiagAntisymForm} (MkMaxel m) = checkBoxWithKeyPred @{ordA} @{ordA} @{mw} (\(x, y) => compare @{ordA} x y /= GT) m
+isCanonicalMaxel {form = GeneralForm}     (MkMaxel m) = checkPairBox @{ordA} @{ordB} @{mw} (\_ => True) m
+isCanonicalMaxel {form = SymForm}         (MkMaxel m) = checkPairBox @{ordA} @{ordA} @{mw} (\(x, y) => compare @{ordA} x y /= GT) m
+isCanonicalMaxel {form = AntisymForm}     (MkMaxel m) = checkPairBox @{ordA} @{ordA} @{mw} (\(x, y) => compare @{ordA} x y == LT) m
+isCanonicalMaxel {form = DiagAntisymForm} (MkMaxel m) = checkPairBox @{ordA} @{ordA} @{mw} (\(x, y) => compare @{ordA} x y /= GT) m
 
 ||| Splits a signed `Box c k` into disjoint positive (`M_+`) and negative (`M_-`) channels,
 ||| with positive weights in each channel: `posBox` has entries with `w > 0`, `negBox` has `-w` for `w < 0`.

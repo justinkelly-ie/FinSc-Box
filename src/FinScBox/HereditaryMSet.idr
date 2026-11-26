@@ -1,8 +1,6 @@
 module FinScBox.HereditaryMSet
 
 import Data.Nat
-import public Data.DPair
-import public Data.Maybe
 import public Decidable.Equality
 import public FinScBox.Box
 
@@ -458,10 +456,7 @@ public export
 checkHMSetFuel : MultisetWeight c => Nat -> HereditaryMSet c -> Bool
 checkHMSetFuel Z     (MkHMSet BoxLeaf) = True
 checkHMSetFuel Z     _                 = False
-checkHMSetFuel (S rem) (MkHMSet b) =
-  case checkBoxBoundsBy (checkHMSetFuel rem) b of
-    Nothing => False
-    Just _  => True
+checkHMSetFuel (S rem) (MkHMSet b) = isCanonicalBoxBy (checkHMSetFuel rem) b
 
 ||| Checks recursively (bounded by cached `hmDepth`) that every AVL node at every
 ||| hereditary level satisfies strict BST ordering, exact `boxHeight` caches,
@@ -473,15 +468,12 @@ isCanonicalHMSet m = checkHMSetFuel (hmDepth m) m
 ||| Total `Dec` recognizer verifying external or deserialized `HereditaryMSet c` candidates.
 public export
 recognizeCanonicalHMSet : MultisetWeight c => (m : HereditaryMSet c) -> Dec (isCanonicalHMSet m = True)
-recognizeCanonicalHMSet m = decideBoolTrue (isCanonicalHMSet m)
+recognizeCanonicalHMSet m = recognizeBy isCanonicalHMSet m
 
 ||| Smart constructor packing a verified `HereditaryMSet c` into a certified `Subset`.
 public export
 toCanonicalHMSet : MultisetWeight c => (m : HereditaryMSet c) -> Maybe (Subset (HereditaryMSet c) (\x => isCanonicalHMSet x = True))
-toCanonicalHMSet m =
-  case recognizeCanonicalHMSet m of
-    Yes prf => Just (Element m prf)
-    No _    => Nothing
+toCanonicalHMSet m = toSubsetBy isCanonicalHMSet m
 
 ------------------------------------------------------------------------
 -- 6. INTRINSIC `GohBound` DERIVATION & SELF-BOUNDING ON `HereditaryMSet c`
@@ -664,6 +656,12 @@ Show Time where
   show (WindowedTime w) = "WindowedTime(" ++ show w ++ ")"
   show OpenFuture       = "OpenFuture"
   show BilateralTime    = "BilateralTime"
+
+||| Sterling recognition predicate certifying `low <= high` on compact `StaticTime low high`.
+public export
+isValidTime : Time -> Bool
+isValidTime (StaticTime low high) = low <= high
+isValidTime _                     = True
 
 ------------------------------------------------------------------------
 -- 8. STREAM STEP, TIME STREAM & LOCAL BRESENHAM PACING

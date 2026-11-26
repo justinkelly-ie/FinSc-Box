@@ -1,6 +1,5 @@
 module FinScBox.MultisetCodec
 
-import Data.DPair
 import Data.List
 import Data.Nat
 import Decidable.Equality
@@ -187,15 +186,12 @@ parsePureMultiset s =
 
 public export
 isValidPureMultisetText : String -> Bool
-isValidPureMultisetText s =
-  case parsePureMultiset s of
-    Just _  => True
-    Nothing => False
+isValidPureMultisetText s = isJust (parsePureMultiset s)
 
 ||| Total constructivist `Dec` recognizer certifying a serialized string parses cleanly.
 public export
 recognizePureMultisetText : (s : String) -> Dec (isValidPureMultisetText s = True)
-recognizePureMultisetText s = decideBoolTrue (isValidPureMultisetText s)
+recognizePureMultisetText = recognizeBy isValidPureMultisetText
 
 ||| Decodes serialized multiset text and certifies recursive AVL canonical invariants.
 public export
