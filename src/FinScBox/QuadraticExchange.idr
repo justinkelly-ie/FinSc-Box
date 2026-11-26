@@ -173,14 +173,8 @@ exchangeQuadraticTriple (MkQuadraticTriple aCoef bCoef rDen) pA pB u =
              (dN, uN)    = pythChoosePair sSum dDiff numD numU rDen eOld
          in MkQuadraticPairResult (tdiv2Box (subBox sSum dN)) (tdiv2Box (addBox sSum dN)) uN
 
-||| Applies the `y`-fold composed quadratic exchange `(A_1 + i B_1)^y` for generator `m >= 2`.
-public export
-exchangeQuadraticPow : (y : Nat) -> (m, pA, pB, u : BoxInt) -> QuadraticPairResult
-exchangeQuadraticPow Z       _ pA pB u = MkQuadraticPairResult pA pB u
-exchangeQuadraticPow y@(S _) m pA pB u = exchangeQuadraticTriple (pythPowerTriple y m) pA pB u
-
 ||| Single-step (`y = 1`) parametric `(m^2 - 1, 2m, m^2 + 1)` integer quadratic exchange
 ||| on `(pA, pB, u)` for any `m >= 2`, preserving `pA + pB` and bounding `2*(pA^2 + pB^2) + u^2`.
 public export
 exchangeQuadratic : (m, pA, pB, u : BoxInt) -> QuadraticPairResult
-exchangeQuadratic = exchangeQuadraticPow 1
+exchangeQuadratic m = exchangeQuadraticTriple (pythGeneratorTriple m)

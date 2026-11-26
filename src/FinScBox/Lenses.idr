@@ -38,24 +38,16 @@ applyExternalLens lens s =
       sShifted = if lens.spaceShift == emptyHMSet then tShifted else zoomSpace lens.spaceShift tShifted
   in lens.project sShifted
 
-||| Post-composes a readout transformation onto an `ExternalLens` without touching `src`.
-public export
-mapExternalLens : (a -> b) -> ExternalLens src a -> ExternalLens src b
-mapExternalLens f lens = { project := f . lens.project } lens
-
 ||| Identity-focus `PureMultiset` lens at `(spaceShift, timeShift)` with readout `proj`.
 public export
 zoomedPureLens : (spaceShift, timeShift : PureMultiset) -> (PureMultiset -> out) -> ExternalLens PureMultiset out
 zoomedPureLens sShift tShift proj = MkExternalLens (\m => m) sShift tShift proj
 
-||| Identity-zoom external lens over a `PureMultiset` focus.
-public export
-directPureLens : (PureMultiset -> out) -> ExternalLens PureMultiset out
-directPureLens = zoomedPureLens emptyHMSet emptyHMSet
-
 public export
 0 prfExternalLensZeroShiftIsId :
-  FinScBox.Lenses.applyExternalLens (FinScBox.Lenses.directPureLens (\m => m)) FinScBox.BlackRedZoom.sampleUnitPairMSet
+  FinScBox.Lenses.applyExternalLens
+    (FinScBox.Lenses.zoomedPureLens FinScBox.HereditaryMSet.emptyHMSet FinScBox.HereditaryMSet.emptyHMSet (\m => m))
+    FinScBox.BlackRedZoom.sampleUnitPairMSet
   = FinScBox.BlackRedZoom.sampleUnitPairMSet
 prfExternalLensZeroShiftIsId = Refl
 

@@ -249,12 +249,6 @@ pushLeftBox : Box c k -> BoxZipper c k -> BoxZipper c k
 pushLeftBox BoxLeaf acc = acc
 pushLeftBox (BoxNode _ l k w r) acc = pushLeftBox l ((k, w, r) :: acc)
 
-||| Pops the next entry from a `BoxZipper c k` in O(log N) worst-case, O(1) amortized.
-public export
-stepBoxZipper : BoxZipper c k -> Maybe (k, c, BoxZipper c k)
-stepBoxZipper [] = Nothing
-stepBoxZipper ((k, w, r) :: rest) = Just (k, w, pushLeftBox r rest)
-
 ||| Pops the next active non-zero entry from a `BoxZipper c k`, bounded by remaining node count.
 public export
 popNextNonZeroZipper : MultisetWeight c => Nat -> BoxZipper c k -> Maybe (k, c, BoxZipper c k)
@@ -347,7 +341,7 @@ scaleBox : MultisetWeight c => c -> Box c k -> Box c k
 scaleBox s t =
   if isZero s then BoxLeaf else mapBoxWeight (mulWeight s) t
 
-||| Total signed mass (`sum_k w_k`) across all active coordinates.
+||| Total signed weight (`sum_k w_k`) across all active coordinates.
 public export
 totalMassBox : MultisetWeight c => Box c k -> c
 totalMassBox = foldBox (\_, w, acc => addWeight acc w) zeroWeight
@@ -358,15 +352,10 @@ filterBox : (Ord k, MultisetWeight c) => (k -> Bool) -> Box c k -> Box c k
 filterBox p t =
   foldBox (\k, w, acc => if p k then setBox k w acc else acc) BoxLeaf t
 
-||| Cross-carrier unit-weight support projection (`oneWeight {c=d}` on every non-zero key, zeros pruned).
+||| Unsigned support indicator (`oneWeight {c=d}` on every non-zero key, `zeroWeight` pruned).
 public export
-projectSupportBox : (Ord k, MultisetWeight c, MultisetWeight d) => Box c k -> Box d k
-projectSupportBox = mapPruneBox (\w => if isZero w then zeroWeight else oneWeight)
-
-||| Unsigned support indicator (`oneWeight` on every non-zero key, `zeroWeight` pruned).
-public export
-supportBox : (Ord k, MultisetWeight c) => Box c k -> Box c k
-supportBox = projectSupportBox
+supportBox : (Ord k, MultisetWeight c, MultisetWeight d) => Box c k -> Box d k
+supportBox = mapPruneBox (\w => if isZero w then zeroWeight else oneWeight)
 
 ||| Single-pass partition of `Box c k` into `(matching, nonMatching)` by key predicate.
 public export
@@ -522,11 +511,6 @@ traceBox m =
             if x == y then addWeight acc w else acc)
           zeroWeight m
 
-||| Diagonal projection mask: retains only entries on the coincidence diagonal a1 == a2.
-public export
-diagMaskBox : (Ord a, MultisetWeight c) => Box c (a, a) -> Box c (a, a)
-diagMaskBox = filterBox (\(x, y) => x == y)
-
 ||| Antisymmetric directed-edge Maxel singleton: `w * ([a, b] - [b, a])` (`a /= b`).
 ||| Guarantees `transposeBox == negateBox` and `totalMassBox == zeroWeight`.
 public export
@@ -540,11 +524,6 @@ mkAntisymEdge a b w =
 public export
 isAntisymBox : (Ord k, MultisetWeight c) => Box c (k, k) -> Bool
 isAntisymBox m = transposeBox m == negateBox m
-
-||| Decides whether a square 2D `Box c (k, k)` is symmetric (`transposeBox m == m`).
-public export
-isSymBox : (Ord k, MultisetWeight c) => Box c (k, k) -> Bool
-isSymBox m = transposeBox m == m
 
 ||| Diagonal embedding of a 1D `Box c k` onto the coincidence diagonal `(k, k)`.
 public export
@@ -745,14 +724,6 @@ singletonMaxelEdge :
 singletonMaxelEdge x y w = setMaxelEdge @{ordA} @{ordB} @{mw} {form} x y w emptyMaxel
 
 public export
-dotSameBox : Ord k => MultisetWeight c => Box c (k, k) -> Box c (k, k) -> c
-dotSameBox = dotBox
-
-public export
-hadamardSameBox : Ord k => MultisetWeight c => Box c (k, k) -> Box c (k, k) -> Box c (k, k)
-hadamardSameBox = hadamardBox
-
-public export
 transposeDiagAntisymBox : Ord k => MultisetWeight c => Box c (k, k) -> Box c (k, k)
 transposeDiagAntisymBox =
   foldBox (\(x, y), w, acc =>
@@ -796,8 +767,11 @@ dotMaxelByTag TagGeneral     (MkMaxel m1) (MkMaxel m2) = dotBox m1 m2
 dotMaxelByTag TagSym         (MkMaxel m1) (MkMaxel m2) = dotSymHalfBox @{ordA} @{mw} m1 m2
 dotMaxelByTag TagDiagAntisym (MkMaxel m1) (MkMaxel m2) = dotSymHalfBox @{ordA} @{mw} m1 m2
 dotMaxelByTag TagAntisym     (MkMaxel m1) (MkMaxel m2) =
-  let half = dotSameBox @{ordA} @{mw} m1 m2
+  let half = dotKK @{ordA} m1 m2
   in addWeight half half
+  where
+    dotKK : Ord k => Box c (k, k) -> Box c (k, k) -> c
+    dotKK = dotBox
 
 public export
 dotMaxel :
@@ -871,22 +845,31 @@ hadamardMaxelByTag :
   {0 f1, f2 : MaxelForm a b} ->
   MaxelFormTag f1 -> MaxelFormTag f2 ->
   Maxel c a b f1 -> Maxel c a b f2 -> Maxel c a b (hadamardMaxelForm f1 f2)
-hadamardMaxelByTag TagGeneral TagGeneral (MkMaxel m1) (MkMaxel m2) =
-  MkMaxel (hadamardBox m1 m2)
-hadamardMaxelByTag TagGeneral TagSym (MkMaxel m1) m2 =
-  MkMaxel (hadamardSameBox @{ordA} @{mw} m1 (toGeneralMaxel @{ordA} @{mw} {form = SymForm} m2).rawMaxelBox)
-hadamardMaxelByTag TagGeneral TagAntisym (MkMaxel m1) m2 =
-  MkMaxel (hadamardSameBox @{ordA} @{mw} m1 (toGeneralMaxel @{ordA} @{mw} {form = AntisymForm} m2).rawMaxelBox)
-hadamardMaxelByTag TagGeneral TagDiagAntisym (MkMaxel m1) m2 =
-  MkMaxel (hadamardSameBox @{ordA} @{mw} m1 (toGeneralMaxel @{ordA} @{mw} {form = DiagAntisymForm} m2).rawMaxelBox)
-hadamardMaxelByTag TagSym TagGeneral m1 (MkMaxel m2) =
-  MkMaxel (hadamardSameBox @{ordA} @{mw} (toGeneralMaxel @{ordA} @{mw} {form = SymForm} m1).rawMaxelBox m2)
-hadamardMaxelByTag TagAntisym TagGeneral m1 (MkMaxel m2) =
-  MkMaxel (hadamardSameBox @{ordA} @{mw} (toGeneralMaxel @{ordA} @{mw} {form = AntisymForm} m1).rawMaxelBox m2)
-hadamardMaxelByTag TagDiagAntisym TagGeneral m1 (MkMaxel m2) =
-  MkMaxel (hadamardSameBox @{ordA} @{mw} (toGeneralMaxel @{ordA} @{mw} {form = DiagAntisymForm} m1).rawMaxelBox m2)
-hadamardMaxelByTag _ _ (MkMaxel m1) (MkMaxel m2) =
-  MkMaxel (hadamardBox m1 m2)
+hadamardMaxelByTag t1 t2 m1 m2 = go @{ordA} @{ordB} t1 t2 m1 m2
+  where
+    hadKK : Ord k => Box c (k, k) -> Box c (k, k) -> Box c (k, k)
+    hadKK = hadamardBox
+
+    go : {0 x, y : Type} -> {auto ox : Ord x} -> {auto oy : Ord y} ->
+         {0 g1, g2 : MaxelForm x y} ->
+         MaxelFormTag g1 -> MaxelFormTag g2 ->
+         Maxel c x y g1 -> Maxel c x y g2 -> Maxel c x y (hadamardMaxelForm g1 g2)
+    go TagGeneral     TagGeneral     (MkMaxel x1) (MkMaxel x2) = MkMaxel (hadamardBox x1 x2)
+    go TagGeneral     TagSym         (MkMaxel x1) x2           = MkMaxel (hadKK @{ox} x1 (toGeneralMaxel @{ox} @{mw} {form = SymForm} x2).rawMaxelBox)
+    go TagGeneral     TagAntisym     (MkMaxel x1) x2           = MkMaxel (hadKK @{ox} x1 (toGeneralMaxel @{ox} @{mw} {form = AntisymForm} x2).rawMaxelBox)
+    go TagGeneral     TagDiagAntisym (MkMaxel x1) x2           = MkMaxel (hadKK @{ox} x1 (toGeneralMaxel @{ox} @{mw} {form = DiagAntisymForm} x2).rawMaxelBox)
+    go TagSym         TagGeneral     x1           (MkMaxel x2) = MkMaxel (hadKK @{ox} (toGeneralMaxel @{ox} @{mw} {form = SymForm} x1).rawMaxelBox x2)
+    go TagAntisym     TagGeneral     x1           (MkMaxel x2) = MkMaxel (hadKK @{ox} (toGeneralMaxel @{ox} @{mw} {form = AntisymForm} x1).rawMaxelBox x2)
+    go TagDiagAntisym TagGeneral     x1           (MkMaxel x2) = MkMaxel (hadKK @{ox} (toGeneralMaxel @{ox} @{mw} {form = DiagAntisymForm} x1).rawMaxelBox x2)
+    go TagSym         TagSym         (MkMaxel x1) (MkMaxel x2) = MkMaxel (hadKK @{ox} x1 x2)
+    go TagAntisym     TagAntisym     (MkMaxel x1) (MkMaxel x2) = MkMaxel (hadKK @{ox} x1 x2)
+    go TagDiagAntisym TagDiagAntisym (MkMaxel x1) (MkMaxel x2) = MkMaxel (hadKK @{ox} x1 x2)
+    go TagAntisym     TagDiagAntisym (MkMaxel x1) (MkMaxel x2) = MkMaxel (hadKK @{ox} x1 x2)
+    go TagDiagAntisym TagAntisym     (MkMaxel x1) (MkMaxel x2) = MkMaxel (hadKK @{ox} x1 x2)
+    go TagSym         TagAntisym     (MkMaxel x1) (MkMaxel x2) = MkMaxel (hadKK @{ox} x1 x2)
+    go TagAntisym     TagSym         (MkMaxel x1) (MkMaxel x2) = MkMaxel (hadKK @{ox} x1 x2)
+    go TagSym         TagDiagAntisym (MkMaxel x1) (MkMaxel x2) = MkMaxel (hadKK @{ox} x1 x2)
+    go TagDiagAntisym TagSym         (MkMaxel x1) (MkMaxel x2) = MkMaxel (hadKK @{ox} x1 x2)
 
 public export
 hadamardMaxel :
@@ -1094,22 +1077,11 @@ isCanonicalBox b =
     Nothing => False
     Just _  => True
 
-||| Proof predicate that a `Box c k` satisfies all canonical AVL and zero-pruning invariants.
-public export
-IsCanonicalBox : MultisetWeight c => Ord k => Box c k -> Type
-IsCanonicalBox b = (isCanonicalBox b = True)
-
 ||| Total boolean-to-`Dec` witness lift with zero runtime overhead.
 public export
 decideBoolTrue : (cond : Bool) -> Dec (cond = True)
 decideBoolTrue True  = Yes Refl
 decideBoolTrue False = No (\case Refl impossible)
-
-||| Total, terminating constructive `Dec` recognizer validating external or dynamic
-||| `Box c k` carriers.
-public export
-recognizeCanonicalBox : MultisetWeight c => Ord k => (b : Box c k) -> Dec (IsCanonicalBox b)
-recognizeCanonicalBox b = decideBoolTrue (isCanonicalBox b)
 
 ||| Splits a signed `Box c k` into disjoint positive (`M_+`) and negative (`M_-`) channels,
 ||| with positive weights in each channel: `posBox` has entries with `w > 0`, `negBox` has `-w` for `w < 0`.

@@ -192,18 +192,14 @@ isValidPureMultisetText s =
     Just _  => True
     Nothing => False
 
-public export
-IsValidPureMultisetText : String -> Type
-IsValidPureMultisetText s = (isValidPureMultisetText s = True)
-
 ||| Total constructivist `Dec` recognizer certifying a serialized string parses cleanly.
 public export
-recognizePureMultisetText : (s : String) -> Dec (IsValidPureMultisetText s)
+recognizePureMultisetText : (s : String) -> Dec (isValidPureMultisetText s = True)
 recognizePureMultisetText s = decideBoolTrue (isValidPureMultisetText s)
 
 ||| Decodes serialized multiset text and certifies recursive AVL canonical invariants.
 public export
-decodeCanonicalMultiset : (s : String) -> Maybe (Subset PureMultiset IsCanonicalHMSet)
+decodeCanonicalMultiset : (s : String) -> Maybe (Subset PureMultiset (\m => isCanonicalHMSet m = True))
 decodeCanonicalMultiset s =
   case parsePureMultiset s of
     Nothing => Nothing

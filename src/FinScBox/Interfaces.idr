@@ -1,7 +1,9 @@
 module FinScBox.Interfaces
 
+import public Data.Fin
 import public Data.Linear
 import Data.Nat
+import public Data.Vect
 import FinScBox.BoxInt
 
 %default total
@@ -425,16 +427,12 @@ intToSigned v =
   else NegZ (integerToNat ((-v) - 1))
 
 public export
-boxIntToSigned : BoxInt -> SignedCoord
-boxIntToSigned (MkBoxInt v) = intToSigned v
-
-public export
 Cast SignedCoord BoxInt where
   cast = signedToBoxInt
 
 public export
 Cast BoxInt SignedCoord where
-  cast = boxIntToSigned
+  cast (MkBoxInt v) = intToSigned v
 
 public export
 isEvenNat : Nat -> Bool
@@ -447,3 +445,101 @@ isOddSigned : SignedCoord -> Bool
 isOddSigned ZeroZ    = False
 isOddSigned (PosZ k) = isEvenNat k
 isOddSigned (NegZ k) = isEvenNat k
+
+-----------------------------------------------------------------------
+-- 4. FIXED-DIMENSION SIGNED SPACE (`Space : Nat -> Type`)
+-----------------------------------------------------------------------
+
+||| Fixed-dimension coordinate space indexed by dimension `n : Nat`.
+public export
+data Space : Nat -> Type where
+  Nil  : Space Z
+  (::) : SignedCoord -> Space n -> Space (S n)
+
+public export
+Eq (Space n) where
+  []        == []        = True
+  (x :: xs) == (y :: ys) = x == y && xs == ys
+
+public export
+Ord (Space n) where
+  compare []        []        = EQ
+  compare (x :: xs) (y :: ys) =
+    case compare x y of
+      EQ  => compare xs ys
+      ord => ord
+
+public export
+Show (Space n) where
+  show s = "Space(" ++ go s ++ ")"
+    where
+      go : {0 m : Nat} -> Space m -> String
+      go []        = ""
+      go (x :: []) = show x
+      go (x :: xs) = show x ++ ", " ++ go xs
+
+public export
+zeroSpace : (n : Nat) -> Space n
+zeroSpace Z     = []
+zeroSpace (S k) = ZeroZ :: zeroSpace k
+
+public export
+addSpace : Space n -> Space n -> Space n
+addSpace []        []        = []
+addSpace (x :: xs) (y :: ys) = addSigned x y :: addSpace xs ys
+
+public export
+negSpace : Space n -> Space n
+negSpace []        = []
+negSpace (x :: xs) = negSigned x :: negSpace xs
+
+0 addSpaceAssoc : (a, b, c : Space n) -> addSpace a (addSpace b c) = addSpace (addSpace a b) c
+addSpaceAssoc []        []        []        = Refl
+addSpaceAssoc (x :: xs) (y :: ys) (z :: zs) =
+  rewrite addSignedAssoc x y z in
+  rewrite addSpaceAssoc xs ys zs in
+  Refl
+
+0 addSpaceInvLaw : {n : Nat} -> (a : Space n) -> addSpace a (negSpace a) = zeroSpace n
+addSpaceInvLaw {n = Z}   []        = Refl
+addSpaceInvLaw {n = S k} (x :: xs) =
+  rewrite addSignedInvLaw x in
+  rewrite addSpaceInvLaw xs in
+  Refl
+
+public export
+implementation {n : Nat} -> MonoidCoord (Space n) where
+  combine = addSpace
+  origin  = zeroSpace n
+  assoc   = addSpaceAssoc
+
+public export
+implementation {n : Nat} -> GroupCoord (Space n) where
+  inverse = negSpace
+  invLaw  = addSpaceInvLaw
+
+public export
+indexSpace : Fin n -> Space n -> SignedCoord
+indexSpace FZ     (x :: _)  = x
+indexSpace (FS i) (_ :: xs) = indexSpace i xs
+
+public export
+unitSpace : {n : Nat} -> Fin n -> Space n
+unitSpace {n = S k} FZ     = PosZ Z :: zeroSpace k
+unitSpace {n = S k} (FS i) = ZeroZ  :: unitSpace i
+
+public export
+tabulateSpace : {n : Nat} -> (Fin n -> SignedCoord) -> Space n
+tabulateSpace {n = Z}   _ = []
+tabulateSpace {n = S k} f = f FZ :: tabulateSpace (f . FS)
+
+public export
+fromIntegers : Vect n Integer -> Space n
+fromIntegers []        = []
+fromIntegers (x :: xs) = intToSigned x :: fromIntegers xs
+
+public export
+foldSpaceWithFin : {n : Nat} -> (Fin n -> SignedCoord -> a -> a) -> a -> Space n -> a
+foldSpaceWithFin {n = Z}   _ acc []        = acc
+foldSpaceWithFin {n = S k} f acc (x :: xs) =
+  foldSpaceWithFin (\i => f (FS i)) (f FZ x acc) xs

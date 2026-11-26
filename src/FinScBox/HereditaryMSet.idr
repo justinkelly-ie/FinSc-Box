@@ -115,11 +115,6 @@ public export
 lookupKeyHMSet : MultisetWeight c => HereditaryMSet c -> HereditaryMSet c -> c
 lookupKeyHMSet k (MkHMSet b) = lookupBox k b
 
-||| Observes the scalar multiplicity at the origin key 0 (\alpha^0).
-public export
-originMultiplicity : MultisetWeight c => HereditaryMSet c -> c
-originMultiplicity = lookupKeyHMSet emptyHMSet
-
 mutual
   public export
   showHMSetFuel : Show c => Nat -> HereditaryMSet c -> String
@@ -166,12 +161,12 @@ public export
 hadamardHMSet : MultisetWeight c => HereditaryMSet c -> HereditaryMSet c -> HereditaryMSet c
 hadamardHMSet (MkHMSet b1) (MkHMSet b2) = MkHMSet (hadamardBox b1 b2)
 
-||| Inner Product / Mass Projection (`<.>`): sums `mulWeight w1 w2` over matching keys into `c`.
+||| Inner Product / Weight Projection (`<.>`): sums `mulWeight w1 w2` over matching keys into `c`.
 public export
 dotHMSet : MultisetWeight c => HereditaryMSet c -> HereditaryMSet c -> c
 dotHMSet (MkHMSet b1) (MkHMSet b2) = dotBox b1 b2
 
-||| Total Mass / Volume (`sumHMSet`): sums all active weights in `c`.
+||| Total Weight / Cardinality (`sumHMSet`): sums all active weights in `c`.
 public export
 sumHMSet : MultisetWeight c => HereditaryMSet c -> c
 sumHMSet (MkHMSet b) = totalMassBox b
@@ -439,10 +434,6 @@ public export
 castSupportHMSet : (MultisetWeight c, MultisetWeight d) => HereditaryMSet c -> HereditaryMSet d
 castSupportHMSet m = castSupportLoop (hmDepth m) m
 
-public export
-MSetSupport : MultisetWeight c => HereditaryMSet c -> HereditaryMSet c
-MSetSupport = castSupportHMSet
-
 ------------------------------------------------------------------------
 -- CONSTRUCTIVIST HEREDITARY MULTISET RECOGNIZER (`recognition-rule.md`)
 ------------------------------------------------------------------------
@@ -463,24 +454,14 @@ public export
 isCanonicalHMSet : MultisetWeight c => HereditaryMSet c -> Bool
 isCanonicalHMSet m = checkHMSetFuel (hmDepth m) m
 
-||| Proof predicate witnessing recursive canonical well-formedness of `HereditaryMSet c`.
-public export
-IsCanonicalHMSet : MultisetWeight c => HereditaryMSet c -> Type
-IsCanonicalHMSet m = (isCanonicalHMSet m = True)
-
 ||| Total `Dec` recognizer verifying external or deserialized `HereditaryMSet c` candidates.
 public export
-recognizeCanonicalHMSet : MultisetWeight c => (m : HereditaryMSet c) -> Dec (IsCanonicalHMSet m)
+recognizeCanonicalHMSet : MultisetWeight c => (m : HereditaryMSet c) -> Dec (isCanonicalHMSet m = True)
 recognizeCanonicalHMSet m = decideBoolTrue (isCanonicalHMSet m)
 
-||| Erased-proof `Subset` alias storing a verified `HereditaryMSet c`.
+||| Smart constructor packing a verified `HereditaryMSet c` into a certified `Subset`.
 public export
-CanonicalHMSet : (c : Type) -> MultisetWeight c => Type
-CanonicalHMSet c = Subset (HereditaryMSet c) IsCanonicalHMSet
-
-||| Smart constructor packing a verified `HereditaryMSet c` into `CanonicalHMSet c`.
-public export
-toCanonicalHMSet : MultisetWeight c => (m : HereditaryMSet c) -> Maybe (CanonicalHMSet c)
+toCanonicalHMSet : MultisetWeight c => (m : HereditaryMSet c) -> Maybe (Subset (HereditaryMSet c) (\x => isCanonicalHMSet x = True))
 toCanonicalHMSet m =
   case recognizeCanonicalHMSet m of
     Yes prf => Just (Element m prf)
@@ -519,12 +500,6 @@ public export
 0 prfElementaryPolarityTwo : FinScBox.HereditaryMSet.elementaryPolarityCount = 2
 prfElementaryPolarityTwo = Refl
 
-||| Two boundary endpoints (`low` entry `Skip` and `high` exit `Skip`)
-||| required to bracket any finite causal interval `[low, high]`.
-public export
-boundaryBracketOverhead : Nat
-boundaryBracketOverhead = elementaryPolarityCount
-
 ||| Helper to calculate `2^n` for `Nat` buffer depth from `elementaryPolarityCount`.
 public export
 fastNatPower2 : Nat -> Nat
@@ -546,11 +521,11 @@ fuelMax a Z         = a
 fuelMax (S a) (S b) = S (fuelMax a b)
 
 ||| Canonical Goh factorisation formula computing exact fuel steps natively in `Nat`:
-||| `Fuel(S k) = S k + floor(k/2) + boundaryBracketOverhead` (e.g. `Fuel(210) = 316`).
+||| `Fuel(S k) = S k + floor(k/2) + elementaryPolarityCount` (e.g. `Fuel(210) = 316`).
 public export
 gohFuelNat : Nat -> Nat
 gohFuelNat Z     = S Z
-gohFuelNat (S k) = S k + half k + boundaryBracketOverhead
+gohFuelNat (S k) = S k + half k + elementaryPolarityCount
 
 ||| First-class constructivist Goh Fuel indexed directly by model capacity.
 public export
@@ -571,11 +546,6 @@ public export
 Show (GohFuel cap) where
   show (MkGohFuel s) = "GohFuel(" ++ show s ++ " steps)"
 
-||| Zero-cost projection to raw steps for loop pattern-matching (`Z` and `S f`).
-public export
-gohSteps : GohFuel cap -> Nat
-gohSteps f = f.fuelSteps
-
 ||| Existential model-indexed `GohFuel` envelope for streams whose active capacity is
 ||| derived dynamically from a `HereditaryMSet c` support summary.
 public export
@@ -584,11 +554,11 @@ data AnyGohFuel : Type where
 
 public export
 Eq AnyGohFuel where
-  (MkAnyGohFuel c1 f1) == (MkAnyGohFuel c2 f2) = c1 == c2 && gohSteps f1 == gohSteps f2
+  (MkAnyGohFuel c1 f1) == (MkAnyGohFuel c2 f2) = c1 == c2 && f1.fuelSteps == f2.fuelSteps
 
 public export
 Show AnyGohFuel where
-  show (MkAnyGohFuel cap gf) = "AnyGohFuel(cap=" ++ show cap ++ ", steps=" ++ show (gohSteps gf) ++ ")"
+  show (MkAnyGohFuel cap gf) = "AnyGohFuel(cap=" ++ show cap ++ ", steps=" ++ show gf.fuelSteps ++ ")"
 
 ||| Single-pass invariants extracted polymorphically from any `HereditaryMSet c`:
 ||| - `nnz`       : Support cardinality `chi_Supp(1)` (non-zero entries)
@@ -632,30 +602,24 @@ collectSupportStats (BoxNode _ left (MkHMSet innerBox) w right) =
                      BoxNode _ BoxLeaf (MkHMSet BoxLeaf) expW BoxLeaf =>
                        weightMagnitude expW
                      _ => fuelMax (boxHeight innerBox) (maxWeightInBox (boxNestedDepth innerBox) innerBox)
-      selfNnz    = if isZero w then 0 else 1
+      selfNnz    = the Nat (if isZero w then 0 else 1)
       mergedNnz  = lStats.nnz + selfNnz + rStats.nnz
       mergedMass = lStats.totalMass + absW + rStats.totalMass
       mergedMax  = fuelMax lStats.maxDeg (fuelMax childDeg rStats.maxDeg)
   in MkSupportStats mergedNnz mergedMass mergedMax
 
-||| Parameterized uncapped intrinsic self-fuel extractor deriving `cap = nnz + S maxDeg`
-||| directly from a `HereditaryMSet c` with a caller-supplied fuel scaling law.
-public export
-selfFuelOfHMSetWith : MultisetWeight c => (Nat -> Nat) -> HereditaryMSet c -> (AnyGohFuel, Nat)
-selfFuelOfHMSetWith fuelFn (MkHMSet rootBox) =
-  let treeBound  = fastNatPower2 (boxHeight rootBox)
-      stats      = collectSupportStats rootBox
-      cap        = stats.nnz + S stats.maxDeg
-      ySteps     = fuelFn cap
-      yieldFuel  = MkGohFuel ySteps
-      stepBudget = ySteps + treeBound + stats.nnz
-  in (MkAnyGohFuel cap yieldFuel, stepBudget)
-
 ||| Uncapped intrinsic self-fuel extractor deriving `cap = nnz + S maxDeg` directly
 ||| from a `HereditaryMSet c` without requiring an external capacity ceiling.
 public export
 selfFuelOfHMSet : MultisetWeight c => HereditaryMSet c -> (AnyGohFuel, Nat)
-selfFuelOfHMSet = selfFuelOfHMSetWith gohFuelNat
+selfFuelOfHMSet (MkHMSet rootBox) =
+  let treeBound  = fastNatPower2 (boxHeight rootBox)
+      stats      = collectSupportStats rootBox
+      cap        = stats.nnz + S stats.maxDeg
+      ySteps     = gohFuelNat cap
+      yieldFuel  = MkGohFuel ySteps
+      stepBudget = ySteps + treeBound + stats.nnz
+  in (MkAnyGohFuel cap yieldFuel, stepBudget)
 
 ------------------------------------------------------------------------
 -- 7. TIME HORIZONS OVER THE INTEGER AXIS Z
@@ -818,7 +782,7 @@ freezeStateStreamWith :
   (initA      : a) ->
   (SolidifiedStream (StaticTime (- cast g) (cast cap)) cap a, Nat)
 freezeStateStreamWith g yieldFuel stepBudget stepFn initA =
-  loop (gohSteps yieldFuel) stepBudget 0 0 0 0 initA
+  loop yieldFuel.fuelSteps stepBudget 0 0 0 0 initA
   where
     loop : (yRem, sRem, currTick, yUsed, sUsed, skAcc : Nat) ->
            (acc : a) ->
