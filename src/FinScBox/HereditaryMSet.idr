@@ -96,9 +96,58 @@ mutual
               EQ  => compareZipperHM (S rem) stepRem (pushLeftBox r1 xs) (pushLeftBox r2 ys)
               ord => ord
 
+mutual
+  public export
+  compareHMSetTry : MultisetWeight c => Nat -> Nat -> HereditaryMSet c -> HereditaryMSet c -> Maybe Ordering
+  compareHMSetTry _ _ (MkHMSet BoxLeaf) (MkHMSet BoxLeaf) = Just EQ
+  compareHMSetTry _ _ (MkHMSet (BoxNode _ BoxLeaf (MkHMSet BoxLeaf) w1 BoxLeaf))
+                      (MkHMSet (BoxNode _ BoxLeaf (MkHMSet BoxLeaf) w2 BoxLeaf)) = Just (compare w1 w2)
+  compareHMSetTry depthFuel stepFuel (MkHMSet b1) (MkHMSet b2) =
+    compareZipperHMTry depthFuel stepFuel (pushLeftBox b1 []) (pushLeftBox b2 [])
+
+  public export
+  compareZipperHMTry : MultisetWeight c =>
+                       Nat ->
+                       Nat ->
+                       BoxZipper c (HereditaryMSet c) ->
+                       BoxZipper c (HereditaryMSet c) ->
+                       Maybe Ordering
+  compareZipperHMTry _ _ [] [] = Just EQ
+  compareZipperHMTry _ Z _  _  = Nothing
+  compareZipperHMTry depthFuel (S stepRem) [] ((_, w2, r2) :: ys) =
+    case compare zeroWeight w2 of
+      EQ  => compareZipperHMTry depthFuel stepRem [] (pushLeftBox r2 ys)
+      ord => Just ord
+  compareZipperHMTry depthFuel (S stepRem) ((_, w1, r1) :: xs) [] =
+    case compare w1 zeroWeight of
+      EQ  => compareZipperHMTry depthFuel stepRem (pushLeftBox r1 xs) []
+      ord => Just ord
+  compareZipperHMTry Z _ _ _ = Nothing
+  compareZipperHMTry (S rem) (S stepRem) ((k1, w1, r1) :: xs) ((k2, w2, r2) :: ys) =
+    case compareHMSetTry rem 16 k1 k2 of
+      Nothing => Nothing
+      Just LT =>
+        case compare w1 zeroWeight of
+          EQ  => compareZipperHMTry (S rem) stepRem (pushLeftBox r1 xs) ((k2, w2, r2) :: ys)
+          ord => Just ord
+      Just GT =>
+        case compare zeroWeight w2 of
+          EQ  => compareZipperHMTry (S rem) stepRem ((k1, w1, r1) :: xs) (pushLeftBox r2 ys)
+          ord => Just ord
+      Just EQ =>
+        case compare w1 w2 of
+          EQ  => compareZipperHMTry (S rem) stepRem (pushLeftBox r1 xs) (pushLeftBox r2 ys)
+          ord => Just ord
+
 public export
 compareHMSet : MultisetWeight c => HereditaryMSet c -> HereditaryMSet c -> Ordering
-compareHMSet m1 m2 = compareHMSetFuel (min (hmDepth m1) (hmDepth m2)) m1 m2
+compareHMSet (MkHMSet BoxLeaf) (MkHMSet BoxLeaf) = EQ
+compareHMSet (MkHMSet (BoxNode _ BoxLeaf (MkHMSet BoxLeaf) w1 BoxLeaf))
+             (MkHMSet (BoxNode _ BoxLeaf (MkHMSet BoxLeaf) w2 BoxLeaf)) = compare w1 w2
+compareHMSet m1 m2 =
+  case compareHMSetTry 4 16 m1 m2 of
+    Just ord => ord
+    Nothing  => compareHMSetFuel (min (hmDepth m1) (hmDepth m2)) m1 m2
 
 public export
 MultisetWeight c => Eq (HereditaryMSet c) where

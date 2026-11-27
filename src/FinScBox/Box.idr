@@ -99,6 +99,56 @@ deleteRootBoxNode l       _ r =
     Nothing => l
     Just (minK, minW, r') => balanceBoxNode l minK minW r'
 
+||| Joins AVL trees `l` and `r` with root `(k, w)` when `boxHeight l > boxHeight r + 1`.
+public export
+joinRightBox : Box c k -> k -> c -> Box c k -> Box c k
+joinRightBox BoxLeaf k w r = mkBoxNode BoxLeaf k w r
+joinRightBox l@(BoxNode hl ll lx lw lr) k w r =
+  if hl <= boxHeight r + 1
+    then balanceBoxNode l k w r
+    else balanceBoxNode ll lx lw (joinRightBox lr k w r)
+
+||| Joins AVL trees `l` and `r` with root `(k, w)` when `boxHeight r > boxHeight l + 1`.
+public export
+joinLeftBox : Box c k -> k -> c -> Box c k -> Box c k
+joinLeftBox l k w BoxLeaf = mkBoxNode l k w BoxLeaf
+joinLeftBox l k w r@(BoxNode hr rl rx rw rr) =
+  if hr <= boxHeight l + 1
+    then balanceBoxNode l k w r
+    else balanceBoxNode (joinLeftBox l k w rl) rx rw rr
+
+||| General O(|hL - hR|) AVL join preserving strict BST ordering (`l < k < r`) with zero key comparisons.
+public export
+joinBox : Box c k -> k -> c -> Box c k -> Box c k
+joinBox l k w r =
+  if boxHeight l > boxHeight r + 1
+    then joinRightBox l k w r
+    else if boxHeight r > boxHeight l + 1
+      then joinLeftBox l k w r
+      else mkBoxNode l k w r
+
+||| Joins two disjoint ordered AVL trees (`keys l < keys r`) with zero key comparisons.
+public export
+join2Box : Box c k -> Box c k -> Box c k
+join2Box BoxLeaf r = r
+join2Box l BoxLeaf = l
+join2Box l r =
+  case extractMinBox r of
+    Nothing               => l
+    Just (minK, minW, r') => joinBox l minK minW r'
+
+||| Splits `Box c k` around key `x` into `(< x, lookup x, > x)` in O(log N).
+public export
+splitBox : Ord k => k -> Box c k -> (Box c k, Maybe c, Box c k)
+splitBox _ BoxLeaf = (BoxLeaf, Nothing, BoxLeaf)
+splitBox x (BoxNode _ l k w r) =
+  case compare x k of
+    EQ => (l, Just w, r)
+    LT => let (ll, found, lr) = splitBox x l
+          in (ll, found, joinBox lr k w r)
+    GT => let (rl, found, rr) = splitBox x r
+          in (joinBox l k w rl, found, rr)
+
 ||| Deletes a key from `Box c k` while preserving AVL balance.
 public export
 deleteBox : Ord k => k -> Box c k -> Box c k
@@ -115,7 +165,7 @@ deleteBox target (BoxNode _ l k w r) =
 
 ||| Looks up a key in `Box c k`, returning `zeroWeight` when absent.
 public export
-lookupBox : (Ord k, MultisetWeight c) => k -> Box c k -> c
+lookupBox : Ord k => MultisetWeight c => k -> Box c k -> c
 lookupBox _   BoxLeaf = zeroWeight
 lookupBox val (BoxNode _ l x w r) =
   case compare val x of
@@ -126,7 +176,7 @@ lookupBox val (BoxNode _ l x w r) =
 ||| Canonical zero-pruning overwrite: sets `val` to `w`, deleting the node
 ||| whenever `isZero w` holds so `BoxLeaf` remains the unique canonical zero.
 public export
-setBox : (Ord k, MultisetWeight c) => k -> c -> Box c k -> Box c k
+setBox : Ord k => MultisetWeight c => k -> c -> Box c k -> Box c k
 setBox val w BoxLeaf =
   if isZero w then BoxLeaf else BoxNode 1 BoxLeaf val w BoxLeaf
 setBox val w (BoxNode _ l x cur r) =
@@ -137,7 +187,7 @@ setBox val w (BoxNode _ l x cur r) =
 
 ||| Accumulates `dw` onto `val` (`cur + dw`), pruning on annihilation.
 public export
-addAtKeyBox : (Ord k, MultisetWeight c) => k -> c -> Box c k -> Box c k
+addAtKeyBox : Ord k => MultisetWeight c => k -> c -> Box c k -> Box c k
 addAtKeyBox val dw BoxLeaf =
   if isZero dw then BoxLeaf else BoxNode 1 BoxLeaf val dw BoxLeaf
 addAtKeyBox val dw node@(BoxNode _ l x cur r) =
@@ -147,6 +197,48 @@ addAtKeyBox val dw node@(BoxNode _ l x cur r) =
                in if isZero newW then deleteRootBoxNode l x r else mkBoxNode l x newW r
          LT => balanceBoxNode (addAtKeyBox val dw l) x cur r
          GT => balanceBoxNode l x cur (addAtKeyBox val dw r)
+
+||| Direct lexicographic pair comparison avoiding per-call `Ord (a, b)` dictionary allocation.
+public export
+comparePairDirect : Ord a => Ord b => a -> b -> (a, b) -> Ordering
+comparePairDirect x y (kx, ky) =
+  case compare x kx of
+    EQ  => compare y ky
+    ord => ord
+
+||| Zero-tuple-allocation lookup on `Box c (a, b)` avoiding `Ord (a, b)` dictionary construction.
+public export
+lookupPairBox : Ord a => Ord b => MultisetWeight c => a -> b -> Box c (a, b) -> c
+lookupPairBox _ _ BoxLeaf = zeroWeight
+lookupPairBox x y (BoxNode _ l k w r) =
+  case comparePairDirect x y k of
+    EQ => w
+    LT => lookupPairBox x y l
+    GT => lookupPairBox x y r
+
+||| Zero-dictionary-allocation overwrite on `Box c (a, b)`, reusing existing key pair on updates.
+public export
+setPairBox : Ord a => Ord b => MultisetWeight c => a -> b -> c -> Box c (a, b) -> Box c (a, b)
+setPairBox x y w BoxLeaf =
+  if isZero w then BoxLeaf else BoxNode 1 BoxLeaf (x, y) w BoxLeaf
+setPairBox x y w (BoxNode _ l k cur r) =
+  case comparePairDirect x y k of
+    EQ => if isZero w then deleteRootBoxNode l k r else mkBoxNode l k w r
+    LT => balanceBoxNode (setPairBox x y w l) k cur r
+    GT => balanceBoxNode l k cur (setPairBox x y w r)
+
+||| Zero-dictionary-allocation accumulation on `Box c (a, b)`, reusing existing key pair on updates.
+public export
+addAtPairBox : Ord a => Ord b => MultisetWeight c => a -> b -> c -> Box c (a, b) -> Box c (a, b)
+addAtPairBox x y dw BoxLeaf =
+  if isZero dw then BoxLeaf else BoxNode 1 BoxLeaf (x, y) dw BoxLeaf
+addAtPairBox x y dw node@(BoxNode _ l k cur r) =
+  if isZero dw then node
+  else case comparePairDirect x y k of
+         EQ => let newW = addWeight cur dw
+               in if isZero newW then deleteRootBoxNode l k r else mkBoxNode l k newW r
+         LT => balanceBoxNode (addAtPairBox x y dw l) k cur r
+         GT => balanceBoxNode l k cur (addAtPairBox x y dw r)
 
 ------------------------------------------------------------------------
 -- 4. CONSTRUCTORS & IN-ORDER FOLDING
@@ -214,11 +306,15 @@ findBox f (BoxNode _ l k w r) =
         Just res => Just res
         Nothing  => findBox f r
 
-||| Maps a weight function over `Box c k` and prunes any resulting `zeroWeight` entries.
+||| Maps a weight function over `Box c k` and prunes any resulting `zeroWeight` entries in O(N) with zero key comparisons.
 public export
-mapPruneBox : (Ord k, MultisetWeight d) => (c -> d) -> Box c k -> Box d k
-mapPruneBox f =
-  foldBox (\k, w, acc => let w' = f w in if isZero w' then acc else setBox k w' acc) BoxLeaf
+mapPruneBox : MultisetWeight d => (c -> d) -> Box c k -> Box d k
+mapPruneBox _ BoxLeaf = BoxLeaf
+mapPruneBox f (BoxNode _ l k w r) =
+  let l' = mapPruneBox f l
+      r' = mapPruneBox f r
+      w' = f w
+  in if isZero w' then join2Box l' r' else joinBox l' k w' r'
 
 ------------------------------------------------------------------------
 -- 5. BOUNDED LEFT-SPINE ZIPPER, EQUALITY & ORDERING (ZERO LIST ALLOCATION)
@@ -246,9 +342,18 @@ popNextNonZeroZipper (S fuel) stk =
       let nextStk = pushLeftBox r rest
       in if isZero w then popNextNonZeroZipper fuel nextStk else Just (k, w, nextStk)
 
+||| Bounded probe pop distinguishing clean exhaustion (`Just Nothing`) from probe fuel exhaustion (`Nothing`).
+public export
+popNextNonZeroZipperTry : MultisetWeight c => Nat -> BoxZipper c k -> Maybe (Maybe (k, c, BoxZipper c k))
+popNextNonZeroZipperTry _ [] = Just Nothing
+popNextNonZeroZipperTry Z _  = Nothing
+popNextNonZeroZipperTry (S fuel) ((k, w, r) :: rest) =
+  let nextStk = pushLeftBox r rest
+  in if isZero w then popNextNonZeroZipperTry fuel nextStk else Just (Just (k, w, nextStk))
+
 ||| Fueled left-spine comparison on non-zero entries of two `Box c k` trees.
 public export
-compareBoxZipperFuel : (Ord k, MultisetWeight c) =>
+compareBoxZipperFuel : Ord k => MultisetWeight c =>
                        Nat -> BoxZipper c k -> BoxZipper c k -> Ordering
 compareBoxZipperFuel Z _ _ = EQ
 compareBoxZipperFuel (S fuel) z1 z2 =
@@ -263,11 +368,58 @@ compareBoxZipperFuel (S fuel) z1 z2 =
                 ord => ord
         ord => ord
 
-||| Structural equality test via incremental non-zero zipper without full list allocation.
+||| Zero-pre-scan probe comparator returning `Just ord` when decided within `fuel` steps,
+||| avoiding `boxNodeCount` scans on early mismatches and small trees.
 public export
-structuralBoxTreeEqual : (Eq k, MultisetWeight c) => Box c k -> Box c k -> Bool
+compareBoxZipperTry : Ord k => MultisetWeight c =>
+                      Nat -> BoxZipper c k -> BoxZipper c k -> Maybe Ordering
+compareBoxZipperTry Z _ _ = Nothing
+compareBoxZipperTry (S fuel) z1 z2 =
+  case (popNextNonZeroZipperTry (S fuel) z1, popNextNonZeroZipperTry (S fuel) z2) of
+    (Just Nothing, Just Nothing)   => Just EQ
+    (Just Nothing, Just (Just _))  => Just LT
+    (Just (Just _), Just Nothing)  => Just GT
+    (Just (Just (k1, w1, r1)), Just (Just (k2, w2, r2))) =>
+      case compare k1 k2 of
+        EQ => case compare w1 w2 of
+                EQ  => compareBoxZipperTry fuel r1 r2
+                ord => Just ord
+        ord => Just ord
+    _ => Nothing
+
+||| Zero-allocation fast path checking equality when two `Box c k` trees share identical AVL shape.
+public export
+sameShapeBoxEqual : Eq k => MultisetWeight c => Box c k -> Box c k -> Bool
+sameShapeBoxEqual BoxLeaf BoxLeaf = True
+sameShapeBoxEqual (BoxNode h1 l1 k1 w1 r1) (BoxNode h2 l2 k2 w2 r2) =
+  h1 == h2 && k1 == k2 && w1 == w2 && sameShapeBoxEqual l1 l2 && sameShapeBoxEqual r1 r2
+sameShapeBoxEqual _ _ = False
+
+public export
+eqBoxZipperTry : Eq k => MultisetWeight c => Nat -> BoxZipper c k -> BoxZipper c k -> Maybe Bool
+eqBoxZipperTry Z _ _ = Nothing
+eqBoxZipperTry (S fuel) z1 z2 =
+  case (popNextNonZeroZipperTry (S fuel) z1, popNextNonZeroZipperTry (S fuel) z2) of
+    (Just Nothing, Just Nothing)  => Just True
+    (Just Nothing, Just (Just _)) => Just False
+    (Just (Just _), Just Nothing) => Just False
+    (Just (Just (k1, w1, r1)), Just (Just (k2, w2, r2))) =>
+      if k1 == k2 && w1 == w2 then eqBoxZipperTry fuel r1 r2 else Just False
+    _ => Nothing
+
+||| Structural equality test via zero-allocation same-shape check, bounded O(1) probe,
+||| and full incremental non-zero zipper fallback.
+public export
+structuralBoxTreeEqual : Eq k => MultisetWeight c => Box c k -> Box c k -> Bool
 structuralBoxTreeEqual t1 t2 =
-  go (S (boxNodeCount t1 + boxNodeCount t2)) (pushLeftBox t1 []) (pushLeftBox t2 [])
+  if sameShapeBoxEqual t1 t2
+    then True
+    else
+      let z1 = pushLeftBox t1 []
+          z2 = pushLeftBox t2 []
+      in case eqBoxZipperTry 16 z1 z2 of
+           Just res => res
+           Nothing  => go (S (boxNodeCount t1 + boxNodeCount t2)) z1 z2
   where
     go : Nat -> BoxZipper c k -> BoxZipper c k -> Bool
     go Z _ _ = True
@@ -279,16 +431,20 @@ structuralBoxTreeEqual t1 t2 =
         _ => False
 
 public export
-(Eq k, MultisetWeight c) => Eq (Box c k) where
+Eq k => MultisetWeight c => Eq (Box c k) where
   (==) = structuralBoxTreeEqual
 
 public export
-(Ord k, MultisetWeight c) => Ord (Box c k) where
+Ord k => MultisetWeight c => Ord (Box c k) where
   compare t1 t2 =
-    compareBoxZipperFuel (S (boxNodeCount t1 + boxNodeCount t2)) (pushLeftBox t1 []) (pushLeftBox t2 [])
+    let z1 = pushLeftBox t1 []
+        z2 = pushLeftBox t2 []
+    in case compareBoxZipperTry 16 z1 z2 of
+         Just ord => ord
+         Nothing  => compareBoxZipperFuel (S (boxNodeCount t1 + boxNodeCount t2)) z1 z2
 
 public export
-(Show k, Show c) => Show (Box c k) where
+Show k => Show c => Show (Box c k) where
   show t = "Box(" ++ show (toAscListBox t) ++ ")"
 
 public export
@@ -304,22 +460,59 @@ public export
 negateBox : MultisetWeight c => Box c k -> Box c k
 negateBox = mapBoxWeight negWeight
 
-||| Exact pointwise superposition/sum of two `Box c k` structures (`A + B`), pruning zeros
-||| and folding over the smaller-height tree (`O(min(N, M) log(N + M))`).
+||| Tree-to-tree AVL split/join union (`O(M log(N/M + 1))`, zero `List` allocation).
 public export
-unionBox : (Ord k, MultisetWeight c) => Box c k -> Box c k -> Box c k
+unionSplitBox : Ord k => MultisetWeight c => Box c k -> Box c k -> Box c k
+unionSplitBox BoxLeaf t2 = t2
+unionSplitBox t1 BoxLeaf = t1
+unionSplitBox (BoxNode _ l1 k w1 r1) t2 =
+  let (l2, optW2, r2) = splitBox k t2
+      l' = unionSplitBox l1 l2
+      r' = unionSplitBox r1 r2
+  in case optW2 of
+       Nothing => joinBox l' k w1 r'
+       Just w2 =>
+         let w' = addWeight w1 w2
+         in if isZero w' then join2Box l' r' else joinBox l' k w' r'
+
+||| Exact pointwise superposition/sum of two `Box c k` structures (`A + B`), pruning zeros.
+public export
+unionBox : Ord k => MultisetWeight c => Box c k -> Box c k -> Box c k
 unionBox BoxLeaf t2 = t2
 unionBox t1 BoxLeaf = t1
 unionBox t1 t2 =
-  if boxHeight t1 >= boxHeight t2
-    then foldBox (\k, w, acc => addAtKeyBox k w acc) t1 t2
-    else foldBox (\k, w, acc => addAtKeyBox k w acc) t2 t1
+  let h1 = boxHeight t1
+      h2 = boxHeight t2
+  in if h1 > h2 + 2
+       then foldBox (\k, w, acc => addAtKeyBox k w acc) t1 t2
+       else if h2 > h1 + 2
+         then foldBox (\k, w, acc => addAtKeyBox k w acc) t2 t1
+         else unionSplitBox t1 t2
+
+||| Tree-to-tree AVL split/join difference (`A - B`, zero `List` allocation).
+public export
+subSplitBox : Ord k => MultisetWeight c => Box c k -> Box c k -> Box c k
+subSplitBox BoxLeaf t2 = negateBox t2
+subSplitBox t1 BoxLeaf = t1
+subSplitBox (BoxNode _ l1 k w1 r1) t2 =
+  let (l2, optW2, r2) = splitBox k t2
+      l' = subSplitBox l1 l2
+      r' = subSplitBox r1 r2
+  in case optW2 of
+       Nothing => joinBox l' k w1 r'
+       Just w2 =>
+         let w' = addWeight w1 (negWeight w2)
+         in if isZero w' then join2Box l' r' else joinBox l' k w' r'
 
 ||| Pointwise difference of two `Box c k` structures (`A - B`), pruning zeros.
 public export
-subBox : (Ord k, MultisetWeight c) => Box c k -> Box c k -> Box c k
+subBox : Ord k => MultisetWeight c => Box c k -> Box c k -> Box c k
+subBox BoxLeaf t2 = negateBox t2
 subBox t1 BoxLeaf = t1
-subBox t1 t2 = foldBox (\k, w, acc => addAtKeyBox k (negWeight w) acc) t1 t2
+subBox t1 t2 =
+  if boxHeight t1 > boxHeight t2 + 2
+    then foldBox (\k, w, acc => addAtKeyBox k (negWeight w) acc) t1 t2
+    else subSplitBox t1 t2
 
 ||| Pointwise scalar multiplication by `s : c`, annihilating immediately when `isZero s` (no `Ord k` needed).
 public export
@@ -332,28 +525,34 @@ public export
 totalMassBox : MultisetWeight c => Box c k -> c
 totalMassBox = foldBox (\_, w, acc => addWeight acc w) zeroWeight
 
-||| Filters entries of `Box c k` by a key predicate.
+||| Filters entries of `Box c k` by a key predicate in O(N) with zero key comparisons.
 public export
-filterBox : (Ord k, MultisetWeight c) => (k -> Bool) -> Box c k -> Box c k
-filterBox p t =
-  foldBox (\k, w, acc => if p k then setBox k w acc else acc) BoxLeaf t
+filterBox : (k -> Bool) -> Box c k -> Box c k
+filterBox _ BoxLeaf = BoxLeaf
+filterBox p (BoxNode _ l k w r) =
+  let l' = filterBox p l
+      r' = filterBox p r
+  in if p k then joinBox l' k w r' else join2Box l' r'
 
-||| Unsigned support indicator (`oneWeight {c=d}` on every non-zero key, `zeroWeight` pruned).
+||| Unsigned support indicator (`oneWeight {c=d}` on every non-zero key, `zeroWeight` pruned) in O(N).
 public export
-supportBox : (Ord k, MultisetWeight c, MultisetWeight d) => Box c k -> Box d k
+supportBox : MultisetWeight c => MultisetWeight d => Box c k -> Box d k
 supportBox = mapPruneBox (\w => if isZero w then zeroWeight else oneWeight)
 
-||| Single-pass partition of `Box c k` into `(matching, nonMatching)` by key predicate.
+||| Single-pass O(N) partition of `Box c k` into `(matching, nonMatching)` with zero key comparisons.
 public export
-partitionBox : (Ord k, MultisetWeight c) => (k -> Bool) -> Box c k -> (Box c k, Box c k)
-partitionBox p t =
-  foldBox (\k, w, (yesB, noB) =>
-             if p k then (setBox k w yesB, noB) else (yesB, setBox k w noB))
-          (BoxLeaf, BoxLeaf) t
+partitionBox : (k -> Bool) -> Box c k -> (Box c k, Box c k)
+partitionBox _ BoxLeaf = (BoxLeaf, BoxLeaf)
+partitionBox p (BoxNode _ l k w r) =
+  let (ly, ln) = partitionBox p l
+      (ry, rn) = partitionBox p r
+  in if p k
+       then (joinBox ly k w ry, join2Box ln rn)
+       else (join2Box ly ry, joinBox ln k w rn)
 
 ||| Retains entries of `t` whose keys are non-zero in `mask`, folding over the smaller-height tree.
 public export
-maskByBox : (Ord k, MultisetWeight c, MultisetWeight d) => Box c k -> Box d k -> Box c k
+maskByBox : Ord k => MultisetWeight c => MultisetWeight d => Box c k -> Box d k -> Box c k
 maskByBox BoxLeaf _ = BoxLeaf
 maskByBox _ BoxLeaf = BoxLeaf
 maskByBox t mask =
@@ -363,32 +562,53 @@ maskByBox t mask =
 
 ||| Retains entries of `t` whose keys are zero (absent) in `mask`.
 public export
-maskOutBox : (Ord k, MultisetWeight c, MultisetWeight d) => Box d k -> Box c k -> Box c k
+maskOutBox : Ord k => MultisetWeight c => MultisetWeight d => Box d k -> Box c k -> Box c k
 maskOutBox BoxLeaf t = t
 maskOutBox _ BoxLeaf = BoxLeaf
 maskOutBox mask t = filterBox (\k => isZero (lookupBox k mask)) t
 
-||| Pointwise Hadamard product (`A .*. B`) on `Box c k`, folding over the smaller-height tree
-||| while preserving `mulWeight w1 w2` operand order.
+||| Tree-to-tree AVL split/join Hadamard product (`O(M log(N/M + 1))`, preserving operand order).
 public export
-hadamardBox : (Ord k, MultisetWeight c) => Box c k -> Box c k -> Box c k
+hadamardSplitBox : Ord k => MultisetWeight c => Bool -> Box c k -> Box c k -> Box c k
+hadamardSplitBox _ BoxLeaf _ = BoxLeaf
+hadamardSplitBox _ _ BoxLeaf = BoxLeaf
+hadamardSplitBox flipMul (BoxNode _ l1 k w1 r1) t2 =
+  let (l2, optW2, r2) = splitBox k t2
+      l' = hadamardSplitBox flipMul l1 l2
+      r' = hadamardSplitBox flipMul r1 r2
+  in case optW2 of
+       Nothing => join2Box l' r'
+       Just w2 =>
+         let prod = if flipMul then mulWeight w2 w1 else mulWeight w1 w2
+         in if isZero prod then join2Box l' r' else joinBox l' k prod r'
+
+||| Pointwise Hadamard product (`A .*. B`) on `Box c k`, using split/join for comparable trees
+||| and smaller-tree lookup for tiny masks while preserving `mulWeight w1 w2` operand order.
+public export
+hadamardBox : Ord k => MultisetWeight c => Box c k -> Box c k -> Box c k
 hadamardBox BoxLeaf _ = BoxLeaf
 hadamardBox _ BoxLeaf = BoxLeaf
 hadamardBox t1 t2 =
-  if boxHeight t1 <= boxHeight t2
-    then foldBox (\k, w1, acc =>
-                    let prod = mulWeight w1 (lookupBox k t2)
-                    in if isZero prod then acc else setBox k prod acc)
-                 BoxLeaf t1
-    else foldBox (\k, w2, acc =>
-                    let prod = mulWeight (lookupBox k t1) w2
-                    in if isZero prod then acc else setBox k prod acc)
-                 BoxLeaf t2
+  let h1 = boxHeight t1
+      h2 = boxHeight t2
+  in if h1 <= h2
+       then if h1 <= 2
+              then foldBox (\k, w1, acc =>
+                              let prod = mulWeight w1 (lookupBox k t2)
+                              in if isZero prod then acc else setBox k prod acc)
+                           BoxLeaf t1
+              else hadamardSplitBox False t1 t2
+       else if h2 <= 2
+              then foldBox (\k, w2, acc =>
+                              let prod = mulWeight (lookupBox k t1) w2
+                              in if isZero prod then acc else setBox k prod acc)
+                           BoxLeaf t2
+              else hadamardSplitBox True t2 t1
 
 ||| Canonical inner product (`A <.> B`) returning scalar multiplicity weight `c`,
 ||| folding over the smaller-height tree while preserving `mulWeight w1 w2` operand order.
 public export
-dotBox : (Ord k, MultisetWeight c) => Box c k -> Box c k -> c
+dotBox : Ord k => MultisetWeight c => Box c k -> Box c k -> c
 dotBox BoxLeaf _ = zeroWeight
 dotBox _ BoxLeaf = zeroWeight
 dotBox t1 t2 =
@@ -401,7 +621,7 @@ dotBox t1 t2 =
 ||| combines coordinates via `f k1 k2`, multiplies weights via `mulWeight w1 w2`,
 ||| and consolidates colliding output keys with automatic zero-pruning.
 public export
-pairBoxWith : (Ord k3, MultisetWeight c) =>
+pairBoxWith : Ord k3 => MultisetWeight c =>
               (f : k1 -> k2 -> k3) ->
               Box c k1 ->
               Box c k2 ->
@@ -420,73 +640,95 @@ pairBoxWith f t1 t2 =
 
 ||| Cartesian outer product (`tensorBox`): `Box c k1 -> Box c k2 -> Box c (k1, k2)`.
 public export
-tensorBox : (Ord k1, Ord k2, MultisetWeight c) => Box c k1 -> Box c k2 -> Box c (k1, k2)
+tensorBox : Ord k1 => Ord k2 => MultisetWeight c => Box c k1 -> Box c k2 -> Box c (k1, k2)
 tensorBox = pairBoxWith (,)
 
 ||| Right index contraction / marginalization summing out `k2`.
 public export
-contractRBox : (Ord k1, MultisetWeight c) => Box c (k1, k2) -> Box c k1
+contractRBox : Ord k1 => MultisetWeight c => Box c (k1, k2) -> Box c k1
 contractRBox BoxLeaf = BoxLeaf
 contractRBox m = foldBox (\(c1, _), w, acc => addAtKeyBox c1 w acc) BoxLeaf m
 
 ||| Left index contraction / marginalization summing out `k1`.
 public export
-contractLBox : (Ord k2, MultisetWeight c) => Box c (k1, k2) -> Box c k2
+contractLBox : Ord k2 => MultisetWeight c => Box c (k1, k2) -> Box c k2
 contractLBox BoxLeaf = BoxLeaf
 contractLBox m = foldBox (\(_, c2), w, acc => addAtKeyBox c2 w acc) BoxLeaf m
 
 ||| Coordinate pushforward re-indexing `k1 -> k2` and summing colliding multiplicities.
 public export
-mapBox : (Ord k2, MultisetWeight c) => (k1 -> k2) -> Box c k1 -> Box c k2
+mapBox : Ord k2 => MultisetWeight c => (k1 -> k2) -> Box c k1 -> Box c k2
 mapBox _ BoxLeaf = BoxLeaf
 mapBox f m = foldBox (\c1, w, acc => addAtKeyBox (f c1) w acc) BoxLeaf m
 
 ||| Monoidal convolution (`mulBoxWith`) over any `MonoidCoord k` and `MultisetWeight c`.
 public export
-mulBoxWith : (MonoidCoord k, MultisetWeight c) => Box c k -> Box c k -> Box c k
+mulBoxWith : MonoidCoord k => MultisetWeight c => Box c k -> Box c k -> Box c k
 mulBoxWith = pairBoxWith combine
 
 ||| Pair coordinate transposition: swaps (a, b) -> (b, a).
 public export
-transposeBox : (Ord a, Ord b, MultisetWeight c) => Box c (a, b) -> Box c (b, a)
+transposeBox : Ord a => Ord b => MultisetWeight c => Box c (a, b) -> Box c (b, a)
 transposeBox BoxLeaf = BoxLeaf
 transposeBox m =
   foldBox (\(x, y), w, acc =>
-            if isZero w then acc else addAtKeyBox (y, x) w acc)
+            if isZero w then acc else addAtPairBox y x w acc)
           BoxLeaf m
 
-||| Pixel-fusion multiset contraction: [a, b1] * [b2, c] -> [a, c] where b1 == b2.
 public export
-composeBox : (Ord a, Ord b, Ord c, MultisetWeight w) =>
+insertRowBucket : Ord b => b -> (c, w) -> Box (List (c, w)) b -> Box (List (c, w)) b
+insertRowBucket key entry BoxLeaf = BoxNode 1 BoxLeaf key [entry] BoxLeaf
+insertRowBucket key entry (BoxNode _ l k vs r) =
+  case compare key k of
+    EQ => mkBoxNode l k (entry :: vs) r
+    LT => balanceBoxNode (insertRowBucket key entry l) k vs r
+    GT => balanceBoxNode l k vs (insertRowBucket key entry r)
+
+public export
+lookupRowBucket : Ord b => b -> Box (List (c, w)) b -> List (c, w)
+lookupRowBucket _ BoxLeaf = []
+lookupRowBucket key (BoxNode _ l k vs r) =
+  case compare key k of
+    EQ => vs
+    LT => lookupRowBucket key l
+    GT => lookupRowBucket key r
+
+public export
+addRowBucketProducts : Ord a => Ord c => MultisetWeight w => a -> w -> List (c, w) -> Box w (a, c) -> Box w (a, c)
+addRowBucketProducts _ _  []             acc = acc
+addRowBucketProducts a w1 ((c, w2) :: xs) acc =
+  addRowBucketProducts a w1 xs (addAtPairBox a c (mulWeight w1 w2) acc)
+
+||| Row-indexed sparse pixel-fusion contraction: `[a, b] * [b, c] -> [a, c]` in O(|M2| log |M2| + work).
+public export
+composeBox : Ord a => Ord b => Ord c => MultisetWeight w =>
              Box w (a, b) -> Box w (b, c) -> Box w (a, c)
 composeBox BoxLeaf _ = BoxLeaf
 composeBox _ BoxLeaf = BoxLeaf
 composeBox m1 m2 =
-  foldBox (\(a, b1), w1, acc1 =>
-            if isZero w1 then acc1
-            else foldBox (\(b2, c), w2, acc2 =>
-                           if isZero w2 || b1 /= b2 then acc2
-                           else addAtKeyBox (a, c) (mulWeight w1 w2) acc2)
-                         acc1 m2)
-          BoxLeaf m1
+  let rows2 = foldBox (\(b2, c), w2, acc =>
+                         if isZero w2 then acc else insertRowBucket b2 (c, w2) acc)
+                      BoxLeaf m2
+  in foldBox (\(a, b1), w1, acc =>
+                if isZero w1
+                  then acc
+                  else addRowBucketProducts a w1 (lookupRowBucket b1 rows2) acc)
+             BoxLeaf m1
 
 ||| Trace of a square 2D multiset: sums multiplicities on the diagonal a1 == a2.
 public export
-traceBox : (Ord a, MultisetWeight c) => Box c (a, a) -> c
+traceBox : Eq a => MultisetWeight c => Box c (a, a) -> c
 traceBox BoxLeaf = zeroWeight
 traceBox m =
   foldBox (\(x, y), w, acc =>
             if x == y then addWeight acc w else acc)
           zeroWeight m
 
-||| Diagonal embedding of a 1D `Box c k` onto the coincidence diagonal `(k, k)`.
+||| Diagonal embedding of a 1D `Box c k` onto the coincidence diagonal `(k, k)` in O(N) with zero key comparisons.
 public export
-diagEmbedBox : (Ord k, MultisetWeight c) => Box c k -> Box c (k, k)
+diagEmbedBox : MultisetWeight c => Box c k -> Box c (k, k)
 diagEmbedBox BoxLeaf = BoxLeaf
-diagEmbedBox m =
-  foldBox (\k, w, acc =>
-             if isZero w then acc else setBox (k, k) w acc)
-          BoxLeaf m
+diagEmbedBox (BoxNode h l k w r) = BoxNode h (diagEmbedBox l) (k, k) w (diagEmbedBox r)
 
 ||| Symmetry form index of a 2-parameter Wildberger `Maxel`, type-bound to `(a, b)`:
 ||| - `GeneralForm`     : arbitrary rectangular `(a, b)` or unstructured square `(k, k)`
@@ -608,46 +850,46 @@ public export
 foldStoredMaxel : (a -> b -> c -> acc -> acc) -> acc -> Maxel c a b form -> acc
 foldStoredMaxel f acc (MkMaxel m) = foldBox (\(x, y), w, a => f x y w a) acc m
 
-||| Filters canonically stored entries of `Maxel c a b form` by an index-pair predicate.
+||| Filters canonically stored entries of `Maxel c a b form` by an index-pair predicate in O(N).
 public export
-filterMaxel : (Ord a, Ord b, MultisetWeight c) => (a -> b -> Bool) -> Maxel c a b form -> Maxel c a b form
+filterMaxel : (a -> b -> Bool) -> Maxel c a b form -> Maxel c a b form
 filterMaxel p (MkMaxel m) = MkMaxel (filterBox (\(x, y) => p x y) m)
 
-||| Zeroes the coincidence diagonal `(x, x)` while preserving `form`.
+||| Zeroes the coincidence diagonal `(x, x)` while preserving `form` in O(N).
 public export
-offDiagMaxel : (Ord k, MultisetWeight c) => Maxel c k k form -> Maxel c k k form
+offDiagMaxel : Eq k => Maxel c k k form -> Maxel c k k form
 offDiagMaxel = filterMaxel (/=)
 
-||| Maps a weight function over stored entries of `Maxel c a b form`, pruning zeros.
+||| Maps a weight function over stored entries of `Maxel c a b form`, pruning zeros in O(N).
 public export
-mapPruneMaxel : (Ord a, Ord b, MultisetWeight d) => (c -> d) -> Maxel c a b form -> Maxel d a b form
+mapPruneMaxel : MultisetWeight d => (c -> d) -> Maxel c a b form -> Maxel d a b form
 mapPruneMaxel f (MkMaxel m) = MkMaxel (mapPruneBox f m)
 
 ||| Retains stored entries of `Maxel c a b form` whose canonical keys are active in `mask`.
 public export
-maskByMaxel : (Ord a, Ord b, MultisetWeight c, MultisetWeight d) =>
+maskByMaxel : Ord a => Ord b => MultisetWeight c => MultisetWeight d =>
               Maxel c a b form -> Maxel d a b form -> Maxel c a b form
 maskByMaxel (MkMaxel m) (MkMaxel mask) = MkMaxel (maskByBox m mask)
 
 ||| Right index contraction summing out `b` from a `GeneralForm` Maxel.
 public export
-contractRMaxel : (Ord a, MultisetWeight c) => Maxel c a b GeneralForm -> Box c a
+contractRMaxel : Ord a => MultisetWeight c => Maxel c a b GeneralForm -> Box c a
 contractRMaxel (MkMaxel m) = contractRBox m
 
 ||| Left index contraction summing out `a` from a `GeneralForm` Maxel.
 public export
-contractLMaxel : (Ord b, MultisetWeight c) => Maxel c a b GeneralForm -> Box c b
+contractLMaxel : Ord b => MultisetWeight c => Maxel c a b GeneralForm -> Box c b
 contractLMaxel (MkMaxel m) = contractLBox m
 
 ||| Relational / matrix composition `[a, b1] * [b2, d] -> [a, d]` (`b1 == b2`) on `GeneralForm` Maxels.
 public export
-composeMaxel : (Ord a, Ord b, Ord d, MultisetWeight c) =>
+composeMaxel : Ord a => Ord b => Ord d => MultisetWeight c =>
                Maxel c a b GeneralForm -> Maxel c b d GeneralForm -> Maxel c a d GeneralForm
 composeMaxel (MkMaxel m1) (MkMaxel m2) = MkMaxel (composeBox m1 m2)
 
 ||| Right linear action `(M v)_a = sum_b M[a, b] * v[b]` of a `GeneralForm` Maxel on `Box c b`.
 public export
-actMaxelR : (Ord a, Ord b, MultisetWeight c) => Maxel c a b GeneralForm -> Box c b -> Box c a
+actMaxelR : Ord a => Ord b => MultisetWeight c => Maxel c a b GeneralForm -> Box c b -> Box c a
 actMaxelR (MkMaxel m) v =
   foldBox (\(x, y), w, acc => addAtKeyBox x (mulWeight w (lookupBox y v)) acc) BoxLeaf m
 
@@ -655,9 +897,9 @@ public export
 lookupHalfBox : Ord k => MultisetWeight c => (allowDiag, antisymOff : Bool) -> k -> k -> Box c (k, k) -> c
 lookupHalfBox allowDiag antisymOff x y m =
   case compare x y of
-    LT => lookupBox (x, y) m
-    EQ => if allowDiag then lookupBox (x, x) m else zeroWeight
-    GT => let w = lookupBox (y, x) m in if antisymOff then negWeight w else w
+    LT => lookupPairBox x y m
+    EQ => if allowDiag then lookupPairBox x x m else zeroWeight
+    GT => let w = lookupPairBox y x m in if antisymOff then negWeight w else w
 
 public export
 updateHalfBox :
@@ -668,23 +910,29 @@ updateHalfBox isAdd allowDiag antisymOff x y w m =
   if isAdd && isZero w
     then m
     else case compare x y of
-           LT => if isAdd then addAtKeyBox (x, y) w m else setBox (x, y) w m
-           EQ => if allowDiag then (if isAdd then addAtKeyBox (x, x) w m else setBox (x, x) w m) else m
+           LT => if isAdd then addAtPairBox x y w m else setPairBox x y w m
+           EQ => if allowDiag then (if isAdd then addAtPairBox x x w m else setPairBox x x w m) else m
            GT => if isAdd
-                   then addAtKeyBox (y, x) (if antisymOff then negWeight w else w) m
-                   else setBox      (y, x) (if antisymOff then negWeight w else w) m
+                   then addAtPairBox y x (if antisymOff then negWeight w else w) m
+                   else setPairBox   y x (if antisymOff then negWeight w else w) m
 
-||| Extracts the diagonal `(x, x)` weights of any square `Maxel` into `Box c k`.
+||| Extracts the diagonal `(x, x)` weights of any square `Maxel` into `Box c k` in O(N) with zero `Ord k` inserts.
 public export
-diagBox : (Ord k, MultisetWeight c) => Maxel c k k form -> Box c k
-diagBox (MkMaxel m) =
-  foldBox (\(x, y), w, acc => if x == y then addAtKeyBox x w acc else acc) BoxLeaf m
+diagBox : Eq k => Maxel c k k form -> Box c k
+diagBox (MkMaxel m) = go m
+  where
+    go : Box c (k, k) -> Box c k
+    go BoxLeaf = BoxLeaf
+    go (BoxNode _ l (x, y) w r) =
+      let l' = go l
+          r' = go r
+      in if x == y then joinBox l' x w r' else join2Box l' r'
 
 public export
 lookupMaxel :
   {auto ordA : Ord a} -> {auto ordB : Ord b} -> {auto mw : MultisetWeight c} ->
   {form : MaxelForm a b} -> a -> b -> Maxel c a b form -> c
-lookupMaxel {form = GeneralForm}     x y (MkMaxel m) = lookupBox (x, y) m
+lookupMaxel {form = GeneralForm}     x y (MkMaxel m) = lookupPairBox @{ordA} @{ordB} @{mw} x y m
 lookupMaxel {form = SymForm}         x y (MkMaxel m) = lookupHalfBox @{ordA} @{mw} True  False x y m
 lookupMaxel {form = AntisymForm}     x y (MkMaxel m) = lookupHalfBox @{ordA} @{mw} False True  x y m
 lookupMaxel {form = DiagAntisymForm} x y (MkMaxel m) = lookupHalfBox @{ordA} @{mw} True  True  x y m
@@ -693,7 +941,7 @@ public export
 setMaxelEdge :
   {auto ordA : Ord a} -> {auto ordB : Ord b} -> {auto mw : MultisetWeight c} ->
   {form : MaxelForm a b} -> a -> b -> c -> Maxel c a b form -> Maxel c a b form
-setMaxelEdge {form = GeneralForm}     x y w (MkMaxel m) = MkMaxel (setBox (x, y) w m)
+setMaxelEdge {form = GeneralForm}     x y w (MkMaxel m) = MkMaxel (setPairBox @{ordA} @{ordB} @{mw} x y w m)
 setMaxelEdge {form = SymForm}         x y w (MkMaxel m) = MkMaxel (updateHalfBox @{ordA} @{mw} False True  False x y w m)
 setMaxelEdge {form = AntisymForm}     x y w (MkMaxel m) = MkMaxel (updateHalfBox @{ordA} @{mw} False False True  x y w m)
 setMaxelEdge {form = DiagAntisymForm} x y w (MkMaxel m) = MkMaxel (updateHalfBox @{ordA} @{mw} False True  True  x y w m)
@@ -702,7 +950,7 @@ public export
 addAtMaxelEdge :
   {auto ordA : Ord a} -> {auto ordB : Ord b} -> {auto mw : MultisetWeight c} ->
   {form : MaxelForm a b} -> a -> b -> c -> Maxel c a b form -> Maxel c a b form
-addAtMaxelEdge {form = GeneralForm}     x y w (MkMaxel m) = MkMaxel (addAtKeyBox (x, y) w m)
+addAtMaxelEdge {form = GeneralForm}     x y w (MkMaxel m) = MkMaxel (addAtPairBox @{ordA} @{ordB} @{mw} x y w m)
 addAtMaxelEdge {form = SymForm}         x y w (MkMaxel m) = MkMaxel (updateHalfBox @{ordA} @{mw} True True  False x y w m)
 addAtMaxelEdge {form = AntisymForm}     x y w (MkMaxel m) = MkMaxel (updateHalfBox @{ordA} @{mw} True False True  x y w m)
 addAtMaxelEdge {form = DiagAntisymForm} x y w (MkMaxel m) = MkMaxel (updateHalfBox @{ordA} @{mw} True True  True  x y w m)
@@ -715,10 +963,9 @@ singletonMaxelEdge x y w = setMaxelEdge @{ordA} @{ordB} @{mw} {form} x y w empty
 
 public export
 transposeDiagAntisymBox : Ord k => MultisetWeight c => Box c (k, k) -> Box c (k, k)
-transposeDiagAntisymBox =
-  foldBox (\(x, y), w, acc =>
-             if x == y then setBox (x, x) w acc else setBox (x, y) (negWeight w) acc)
-          BoxLeaf
+transposeDiagAntisymBox BoxLeaf = BoxLeaf
+transposeDiagAntisymBox (BoxNode h l k@(x, y) w r) =
+  BoxNode h (transposeDiagAntisymBox l) k (if x == y then w else negWeight w) (transposeDiagAntisymBox r)
 
 public export
 dotSymHalfBox : Ord k => MultisetWeight c => Box c (k, k) -> Box c (k, k) -> c
@@ -726,7 +973,7 @@ dotSymHalfBox BoxLeaf _ = zeroWeight
 dotSymHalfBox _ BoxLeaf = zeroWeight
 dotSymHalfBox m1 m2 =
   foldBox (\(x, y), w1, acc =>
-             let prod = mulWeight w1 (lookupBox (x, y) m2)
+             let prod = mulWeight w1 (lookupPairBox x y m2)
              in if x == y
                   then addWeight acc prod
                   else addWeight acc (addWeight prod prod))
@@ -757,12 +1004,12 @@ transposeMaxel {form = AntisymForm}     (MkMaxel m) = MkMaxel (negateBox m)
 transposeMaxel {form = DiagAntisymForm} (MkMaxel m) = MkMaxel (transposeDiagAntisymBox @{ordA} m)
 
 public export
-traceMaxel : (Ord k, MultisetWeight c) => {form : MaxelForm k k} -> Maxel c k k form -> c
+traceMaxel : Eq k => MultisetWeight c => {form : MaxelForm k k} -> Maxel c k k form -> c
 traceMaxel {form = AntisymForm} _           = zeroWeight
 traceMaxel                      (MkMaxel m) = traceBox m
 
 public export
-diagEmbedMaxel : (Ord k, MultisetWeight c) => Box c k -> Maxel c k k SymForm
+diagEmbedMaxel : MultisetWeight c => Box c k -> Maxel c k k SymForm
 diagEmbedMaxel b = MkMaxel (diagEmbedBox b)
 
 public export
@@ -770,8 +1017,8 @@ expandHalfBox : Ord k => MultisetWeight c => Bool -> (c -> c) -> Box c (k, k) ->
 expandHalfBox allowDiag oppFn =
   foldBox (\(x, y), w, acc =>
              if x == y
-               then if allowDiag then addAtKeyBox (x, x) w acc else acc
-               else addAtKeyBox (y, x) (oppFn w) (addAtKeyBox (x, y) w acc))
+               then if allowDiag then addAtPairBox x x w acc else acc
+               else addAtPairBox y x (oppFn w) (addAtPairBox x y w acc))
           BoxLeaf
 
 public export
@@ -831,7 +1078,7 @@ hadamardMaxelByTag t1 t2 m1 m2 = go @{ordA} @{ordB} t1 t2 m1 m2
 
 public export
 shiftConvolveMaxel :
-  (MonoidCoord k, MultisetWeight c) =>
+  MonoidCoord k => MultisetWeight c =>
   {form : MaxelForm k k} ->
   Maxel c k k form ->
   Box c k ->
@@ -839,31 +1086,34 @@ shiftConvolveMaxel :
 shiftConvolveMaxel (MkMaxel BoxLeaf) _ = MkMaxel BoxLeaf
 shiftConvolveMaxel _ BoxLeaf           = MkMaxel BoxLeaf
 shiftConvolveMaxel {form} (MkMaxel m) shiftBox =
-  MkMaxel $ foldBox (\(x, y), w1, outer =>
-                       foldBox (\s, w2, inner =>
-                                  let x'   = combine x s
-                                      y'   = combine y s
-                                      prod = mulWeight w1 w2
-                                  in case form of
-                                       GeneralForm     => if isZero prod then inner else addAtKeyBox (x', y') prod inner
-                                       SymForm         => updateHalfBox True True  False x' y' prod inner
-                                       AntisymForm     => updateHalfBox True False True  x' y' prod inner
-                                       DiagAntisymForm => updateHalfBox True True  True  x' y' prod inner)
-                               outer shiftBox)
-                    BoxLeaf m
+  let stepFn : k -> k -> c -> Box c (k, k) -> Box c (k, k)
+      stepFn = case form of
+                 GeneralForm     => \x', y', prod, inner => if isZero prod then inner else addAtPairBox x' y' prod inner
+                 SymForm         => updateHalfBox True True  False
+                 AntisymForm     => updateHalfBox True False True
+                 DiagAntisymForm => updateHalfBox True True  True
+  in MkMaxel $ foldBox (\s, w2, outer =>
+                          if w2 == oneWeight
+                            then foldBox (\(x, y), w1, inner =>
+                                            stepFn (combine x s) (combine y s) w1 inner)
+                                         outer m
+                            else foldBox (\(x, y), w1, inner =>
+                                            stepFn (combine x s) (combine y s) (mulWeight w1 w2) inner)
+                                         outer m)
+                       BoxLeaf shiftBox
 
 ||| Symmetric unit-step stencil `sum_{a in axes} ([+stepFn a] + [-stepFn a])` over any `GroupCoord k`.
 public export
-unitStencilBox : (GroupCoord k, MultisetWeight c) => (a -> k) -> Box d a -> Box c k
+unitStencilBox : GroupCoord k => MultisetWeight c => (a -> k) -> Box d a -> Box c k
 unitStencilBox stepFn =
   foldBox (\axKey, _, acc =>
              let d = stepFn axKey
              in addAtKeyBox (inverse d) oneWeight (addAtKeyBox d oneWeight acc))
           BoxLeaf
 
-||| Divides all entries of a `Box BoxInt k` symmetrically by `den` and prunes values below `minCut`.
+||| Divides all entries of a `Box BoxInt k` symmetrically by `den` and prunes values below `minCut` in O(N).
 public export
-scaleDivPruneBox : Ord k => (den, minCut : BoxInt) -> Box BoxInt k -> Box BoxInt k
+scaleDivPruneBox : (den, minCut : BoxInt) -> Box BoxInt k -> Box BoxInt k
 scaleDivPruneBox den minCut b =
   if den <= 0
     then BoxLeaf
@@ -875,11 +1125,11 @@ scaleDivPruneBox den minCut b =
                               in if abs q >= minCut then q else zeroWeight) b
 
 public export
-pruneMinMaxel : (Ord a, Ord b) => BoxInt -> Maxel BoxInt a b form -> Maxel BoxInt a b form
+pruneMinMaxel : BoxInt -> Maxel BoxInt a b form -> Maxel BoxInt a b form
 pruneMinMaxel minCut (MkMaxel m) = MkMaxel (scaleDivPruneBox 1 minCut m)
 
 public export
-scaleDivPruneMaxel : (Ord a, Ord b) => (den, minCut : BoxInt) -> Maxel BoxInt a b form -> Maxel BoxInt a b form
+scaleDivPruneMaxel : (den, minCut : BoxInt) -> Maxel BoxInt a b form -> Maxel BoxInt a b form
 scaleDivPruneMaxel den minCut (MkMaxel m) = MkMaxel (scaleDivPruneBox den minCut m)
 
 ------------------------------------------------------------------------
@@ -887,23 +1137,23 @@ scaleDivPruneMaxel den minCut (MkMaxel m) = MkMaxel (scaleDivPruneBox den minCut
 ------------------------------------------------------------------------
 
 public export
-(Ord k, MultisetWeight c) => Semigroup (Box c k) where
+Ord k => MultisetWeight c => Semigroup (Box c k) where
   (<+>) = unionBox
 
 public export
-(Ord k, MultisetWeight c) => Monoid (Box c k) where
+Ord k => MultisetWeight c => Monoid (Box c k) where
   neutral = BoxLeaf
 
 public export
-(Ord a, Ord b, MultisetWeight c) => Semigroup (Maxel c a b form) where
+Ord a => Ord b => MultisetWeight c => Semigroup (Maxel c a b form) where
   (<+>) (MkMaxel m1) (MkMaxel m2) = MkMaxel (unionBox m1 m2)
 
 public export
-(Ord a, Ord b, MultisetWeight c) => Monoid (Maxel c a b form) where
+Ord a => Ord b => MultisetWeight c => Monoid (Maxel c a b form) where
   neutral = emptyMaxel
 
 public export
-(Ord k, MultisetWeight c) => MultisetAlgebra c (Box c k) where
+Ord k => MultisetWeight c => MultisetAlgebra c (Box c k) where
   zeroM  = BoxLeaf
   addM   = unionBox
   negM   = negateBox
@@ -912,11 +1162,11 @@ public export
   dotM   = dotBox
 
 public export
-(Ord k, MultisetWeight c) => MultisetHadamard (Box c k) (Box c k) (Box c k) where
+Ord k => MultisetWeight c => MultisetHadamard (Box c k) (Box c k) (Box c k) where
   (.*.) = hadamardBox
 
 public export
-(Ord a, Ord b, MultisetWeight c, KnownMaxelForm form) =>
+Ord a => Ord b => MultisetWeight c => KnownMaxelForm form =>
 MultisetAlgebra c (Maxel c a b form) where
   zeroM                          = emptyMaxel
   addM (MkMaxel m1) (MkMaxel m2) = MkMaxel (unionBox m1 m2)
@@ -927,16 +1177,16 @@ MultisetAlgebra c (Maxel c a b form) where
 
 ||| Decides whether the full square expansion of `m` is symmetric (`M^T == M`).
 public export
-isSymMaxel : (Ord k, MultisetWeight c) => {form : MaxelForm k k} -> Maxel c k k form -> Bool
+isSymMaxel : Ord k => MultisetWeight c => {form : MaxelForm k k} -> Maxel c k k form -> Bool
 isSymMaxel m = let g = toGeneralMaxel m in transposeMaxel g == g
 
 ||| Decides whether the full square expansion of `m` is antisymmetric (`M^T == -M`).
 public export
-isAntisymMaxel : (Ord k, MultisetWeight c) => {form : MaxelForm k k} -> Maxel c k k form -> Bool
+isAntisymMaxel : Ord k => MultisetWeight c => {form : MaxelForm k k} -> Maxel c k k form -> Bool
 isAntisymMaxel m = let g = toGeneralMaxel m in transposeMaxel g == negM g
 
 public export
-(Ord a, Ord b, MultisetWeight c, KnownMaxelForm f1, KnownMaxelForm f2) =>
+Ord a => Ord b => MultisetWeight c => KnownMaxelForm f1 => KnownMaxelForm f2 =>
 MultisetHadamard (Maxel c a b f1) (Maxel c a b f2) (Maxel c a b (hadamardMaxelForm f1 f2)) where
   (.*.) = hadamardMaxelByTag maxelFormTag maxelFormTag
 
@@ -952,7 +1202,7 @@ MonoidCoord k => Neg (Box BoxInt k) where
   (-) = subBox
 
 public export
-(Ord k1, Ord k2, MultisetWeight c) => MultisetOuter (Box c k1) (Box c k2) (Box c (k1, k2)) where
+Ord k1 => Ord k2 => MultisetWeight c => MultisetOuter (Box c k1) (Box c k2) (Box c (k1, k2)) where
   (><) = tensorBox
 
 
@@ -1040,7 +1290,7 @@ isCanonicalMaxel {form = DiagAntisymForm} (MkMaxel m) = checkPairBox @{ordA} @{o
 ||| Splits a signed `Box c k` into disjoint positive (`M_+`) and negative (`M_-`) channels,
 ||| with positive weights in each channel: `posBox` has entries with `w > 0`, `negBox` has `-w` for `w < 0`.
 public export
-splitBoxChannels : (MultisetWeight c, Ord k) => Box c k -> (Box c k, Box c k)
+splitBoxChannels : MultisetWeight c => Ord k => Box c k -> (Box c k, Box c k)
 splitBoxChannels box =
   foldBox (\k, w, (pAcc, nAcc) =>
             case compare w zeroWeight of
