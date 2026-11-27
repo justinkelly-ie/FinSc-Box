@@ -286,6 +286,7 @@ public export
 MultisetWeight c => MonoidCoord (HereditaryMSet c) where
   combine = addHMSet
   origin  = emptyHMSet
+  isOrderPreserving = isOrderedGroupWeight {c}
 
 public export
 MultisetWeight c => GroupCoord (HereditaryMSet c) where

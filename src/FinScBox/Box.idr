@@ -1076,6 +1076,25 @@ hadamardMaxelByTag t1 t2 m1 m2 = go @{ordA} @{ordB} t1 t2 m1 m2
     go TagSym         TagDiagAntisym (MkMaxel x1) (MkMaxel x2) = MkMaxel (hadKK @{ox} x1 x2)
     go TagDiagAntisym TagSym         (MkMaxel x1) (MkMaxel x2) = MkMaxel (hadKK @{ox} x1 x2)
 
+||| O(N) structure-preserving coordinate translation on `Box c (k, k)` when `combine _ s` preserves `Ord k`.
+public export
+shiftPairTreeOne : MonoidCoord k => k -> Box c (k, k) -> Box c (k, k)
+shiftPairTreeOne _ BoxLeaf = BoxLeaf
+shiftPairTreeOne s (BoxNode h l (x, y) w r) =
+  BoxNode h (shiftPairTreeOne s l) (combine x s, combine y s) w (shiftPairTreeOne s r)
+
+||| O(N) order-preserving coordinate translation with scalar weight multiplication and zero-pruning.
+public export
+shiftPairTreeMul : MonoidCoord k => MultisetWeight c => k -> c -> Box c (k, k) -> Box c (k, k)
+shiftPairTreeMul _ _  BoxLeaf = BoxLeaf
+shiftPairTreeMul s w2 (BoxNode _ l (x, y) w1 r) =
+  let l'   = shiftPairTreeMul s w2 l
+      r'   = shiftPairTreeMul s w2 r
+      prod = mulWeight w1 w2
+  in if isZero prod
+       then join2Box l' r'
+       else joinBox l' (combine x s, combine y s) prod r'
+
 public export
 shiftConvolveMaxel :
   MonoidCoord k => MultisetWeight c =>
@@ -1085,22 +1104,32 @@ shiftConvolveMaxel :
   Maxel c k k form
 shiftConvolveMaxel (MkMaxel BoxLeaf) _ = MkMaxel BoxLeaf
 shiftConvolveMaxel _ BoxLeaf           = MkMaxel BoxLeaf
-shiftConvolveMaxel {form} (MkMaxel m) shiftBox =
-  let stepFn : k -> k -> c -> Box c (k, k) -> Box c (k, k)
-      stepFn = case form of
-                 GeneralForm     => \x', y', prod, inner => if isZero prod then inner else addAtPairBox x' y' prod inner
-                 SymForm         => updateHalfBox True True  False
-                 AntisymForm     => updateHalfBox True False True
-                 DiagAntisymForm => updateHalfBox True True  True
-  in MkMaxel $ foldBox (\s, w2, outer =>
-                          if w2 == oneWeight
-                            then foldBox (\(x, y), w1, inner =>
-                                            stepFn (combine x s) (combine y s) w1 inner)
-                                         outer m
-                            else foldBox (\(x, y), w1, inner =>
-                                            stepFn (combine x s) (combine y s) (mulWeight w1 w2) inner)
-                                         outer m)
-                       BoxLeaf shiftBox
+shiftConvolveMaxel {k} {form} (MkMaxel m) shiftBox =
+  if isOrderPreserving {k}
+    then MkMaxel $ foldBox (\s, w2, outer =>
+                             if isZero w2
+                               then outer
+                               else let shifted = if w2 == oneWeight
+                                                    then if s == origin then m else shiftPairTreeOne s m
+                                                    else shiftPairTreeMul s w2 m
+                                    in unionBox outer shifted)
+                           BoxLeaf shiftBox
+    else
+      let stepFn : k -> k -> c -> Box c (k, k) -> Box c (k, k)
+          stepFn = case form of
+                     GeneralForm     => \x', y', prod, inner => if isZero prod then inner else addAtPairBox x' y' prod inner
+                     SymForm         => updateHalfBox True True  False
+                     AntisymForm     => updateHalfBox True False True
+                     DiagAntisymForm => updateHalfBox True True  True
+      in MkMaxel $ foldBox (\s, w2, outer =>
+                              if w2 == oneWeight
+                                then foldBox (\(x, y), w1, inner =>
+                                                stepFn (combine x s) (combine y s) w1 inner)
+                                             outer m
+                                else foldBox (\(x, y), w1, inner =>
+                                                stepFn (combine x s) (combine y s) (mulWeight w1 w2) inner)
+                                             outer m)
+                           BoxLeaf shiftBox
 
 ||| Symmetric unit-step stencil `sum_{a in axes} ([+stepFn a] + [-stepFn a])` over any `GroupCoord k`.
 public export
@@ -1111,26 +1140,39 @@ unitStencilBox stepFn =
              in addAtKeyBox (inverse d) oneWeight (addAtKeyBox d oneWeight acc))
           BoxLeaf
 
-||| Divides all entries of a `Box BoxInt k` symmetrically by `den` and prunes values below `minCut` in O(N).
+||| Scales all entries of a `Box BoxInt k` by `num`, divides symmetrically by `den`,
+||| and prunes magnitudes below `minCut` in a single O(N) pass.
 public export
-scaleDivPruneBox : (den, minCut : BoxInt) -> Box BoxInt k -> Box BoxInt k
-scaleDivPruneBox den minCut b =
-  if den <= 0
+mulDivPruneBox : (num, den, minCut : BoxInt) -> Box BoxInt k -> Box BoxInt k
+mulDivPruneBox num den minCut b =
+  if den <= 0 || boxIsZero num
     then BoxLeaf
-    else if den == 1
+    else if num == 1 && den == 1
       then if minCut <= 1
              then b
              else mapPruneBox (\w => if abs w >= minCut then w else zeroWeight) b
-      else mapPruneBox (\w => let q = tdivPosBox w den
-                              in if abs q >= minCut then q else zeroWeight) b
+      else if num == 1
+        then mapPruneBox (\w => let q = tdivPosBox w den
+                                in if abs q >= minCut then q else zeroWeight) b
+        else mapPruneBox (\w => let q = tdivPosBox (num * w) den
+                                in if abs q >= minCut then q else zeroWeight) b
+
+||| Divides all entries of a `Box BoxInt k` symmetrically by `den` and prunes values below `minCut` in O(N).
+public export
+scaleDivPruneBox : (den, minCut : BoxInt) -> Box BoxInt k -> Box BoxInt k
+scaleDivPruneBox = mulDivPruneBox 1
 
 public export
 pruneMinMaxel : BoxInt -> Maxel BoxInt a b form -> Maxel BoxInt a b form
-pruneMinMaxel minCut (MkMaxel m) = MkMaxel (scaleDivPruneBox 1 minCut m)
+pruneMinMaxel minCut (MkMaxel m) = MkMaxel (mulDivPruneBox 1 1 minCut m)
+
+public export
+mulDivPruneMaxel : (num, den, minCut : BoxInt) -> Maxel BoxInt a b form -> Maxel BoxInt a b form
+mulDivPruneMaxel num den minCut (MkMaxel m) = MkMaxel (mulDivPruneBox num den minCut m)
 
 public export
 scaleDivPruneMaxel : (den, minCut : BoxInt) -> Maxel BoxInt a b form -> Maxel BoxInt a b form
-scaleDivPruneMaxel den minCut (MkMaxel m) = MkMaxel (scaleDivPruneBox den minCut m)
+scaleDivPruneMaxel = mulDivPruneMaxel 1
 
 ------------------------------------------------------------------------
 -- 7. STANDARD ALGEBRAIC INSTANCES ON `Box c k`

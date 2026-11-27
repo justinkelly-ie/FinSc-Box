@@ -16,6 +16,8 @@ public export
 interface Ord k => MonoidCoord k where
   combine : k -> k -> k
   origin  : k
+  isOrderPreserving : Bool
+  isOrderPreserving = False
 
 ||| Reversible coordinate space with exact additive inverses.
 public export
@@ -31,23 +33,26 @@ public export
 MonoidCoord Nat where
   combine = (+)
   origin  = 0
+  isOrderPreserving = True
 
 public export
 MonoidCoord () where
   combine _ _ = ()
   origin = ()
+  isOrderPreserving = True
 
 public export
 GroupCoord () where
   inverse _ = ()
 
 public export
-(MonoidCoord a, MonoidCoord b) => MonoidCoord (a, b) where
+MonoidCoord a => MonoidCoord b => MonoidCoord (a, b) where
   combine (x1, y1) (x2, y2) = (combine x1 x2, combine y1 y2)
   origin = (origin, origin)
+  isOrderPreserving = isOrderPreserving {k = a} && isOrderPreserving {k = b}
 
 public export
-(GroupCoord a, GroupCoord b) => GroupCoord (a, b) where
+GroupCoord a => GroupCoord b => GroupCoord (a, b) where
   inverse (x, y) = (inverse x, inverse y)
 
 -----------------------------------------------------------------------
@@ -66,6 +71,8 @@ interface Ord c => MultisetWeight c where
   mulWeight  : c -> c -> c
   weightMagnitude : c -> Nat
   weightMagnitude w = if isZero w then 0 else 1
+  isOrderedGroupWeight : Bool
+  isOrderedGroupWeight = False
 
 public export
 MultisetWeight BoxInt where
@@ -76,6 +83,7 @@ MultisetWeight BoxInt where
   negWeight  = negBox
   mulWeight  = mulBox
   weightMagnitude (MkBoxInt w) = integerToNat (abs w)
+  isOrderedGroupWeight = True
 
 ||| Defines how a multiplicity `c` peels off one positive (`Left`)
 ||| or negative (`Right`) quantum at a time.
@@ -406,6 +414,7 @@ public export
 MonoidCoord SignedCoord where
   combine = addSigned
   origin  = ZeroZ
+  isOrderPreserving = True
 
 public export
 GroupCoord SignedCoord where
@@ -520,6 +529,7 @@ public export
 implementation {n : Nat} -> MonoidCoord (Space n) where
   combine = addSpace
   origin  = zeroSpace n
+  isOrderPreserving = True
 
 public export
 implementation {n : Nat} -> GroupCoord (Space n) where
