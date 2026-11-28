@@ -47,6 +47,7 @@ divModIntegerPos : Integer -> Integer -> (Integer, Integer)
 divModIntegerPos num den =
   if den <= 0 || num <= 0
     then (0, if num <= 0 then 0 else num)
+    else consumePow2Pairs num 0 (buildPow2Pairs 128 num 1 den [])
     else consumePow2Pairs num 0 (buildPow2Pairs maxBitScanFuel num 1 den [])
 
 ||| Total O(log N) binary integer quotient on positive integers (`assert_total`-free).
@@ -72,8 +73,11 @@ divModIntegerEuclid a b =
                           else (-(q0 + 1), absB - r0)
       in if b > 0 then (qPos, r) else (-qPos, r)
 
+||| Symmetric truncating division by a strictly positive integer denominator (`assert_total`-free).
 ||| Symmetric truncating division by a strictly positive `BoxInt` denominator (`assert_total`-free).
 public export
+tdivPosBox : BoxInt -> Integer -> BoxInt
+tdivPosBox (MkBoxInt v) den =
 tdivPosBox : BoxInt -> BoxInt -> BoxInt
 tdivPosBox (MkBoxInt v) (MkBoxInt den) =
   if den <= 0
@@ -83,8 +87,11 @@ tdivPosBox (MkBoxInt v) (MkBoxInt den) =
       else MkBoxInt (-(divIntegerPos (-v) den))
 
 ||| Symmetric nearest-integer division (half toward zero for even denominators,
+||| exact nearest integer for odd denominators) by a strictly positive integer (`assert_total`-free).
 ||| exact nearest integer for odd denominators) by a strictly positive `BoxInt` (`assert_total`-free).
 public export
+rdivPosBox : BoxInt -> Integer -> BoxInt
+rdivPosBox (MkBoxInt v) den =
 rdivPosBox : BoxInt -> BoxInt -> BoxInt
 rdivPosBox (MkBoxInt v) (MkBoxInt den) =
   if den <= 0
@@ -97,6 +104,7 @@ rdivPosBox (MkBoxInt v) (MkBoxInt den) =
 ||| Symmetric truncating division by 2 directly on signed `BoxInt` (`assert_total`-free).
 public export
 tdiv2Box : BoxInt -> BoxInt
+tdiv2Box b = tdivPosBox b 2
 tdiv2Box b = tdivPosBox b (MkBoxInt 2)
 
 ||| Total O(log |v|) odd-parity predicate directly on signed `BoxInt` (`assert_total`-free).

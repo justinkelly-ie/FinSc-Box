@@ -1329,15 +1329,16 @@ isCanonicalMaxel {form = SymForm}         (MkMaxel m) = checkPairBox @{ordA} @{o
 isCanonicalMaxel {form = AntisymForm}     (MkMaxel m) = checkPairBox @{ordA} @{ordA} @{mw} (\(x, y) => compare @{ordA} x y == LT) m
 isCanonicalMaxel {form = DiagAntisymForm} (MkMaxel m) = checkPairBox @{ordA} @{ordA} @{mw} (\(x, y) => compare @{ordA} x y /= GT) m
 
-||| Splits a signed `Box c k` into disjoint positive (`M_+`) and negative (`M_-`) channels,
-||| with positive weights in each channel: `posBox` has entries with `w > 0`, `negBox` has `-w` for `w < 0`.
+||| Splits a signed `Box c k` into disjoint positive (`M_+`) and negative (`M_-`) channels
+||| in O(N) time with zero key comparisons, preserving canonical AVL balance.
 public export
-splitBoxChannels : MultisetWeight c => Ord k => Box c k -> (Box c k, Box c k)
-splitBoxChannels box =
-  foldBox (\k, w, (pAcc, nAcc) =>
-            case compare w zeroWeight of
-              GT => (setBox k w pAcc, nAcc)
-              LT => (pAcc, setBox k (negWeight w) nAcc)
-              EQ => (pAcc, nAcc))
-          (BoxLeaf, BoxLeaf)
-          box
+splitBoxChannels : MultisetWeight c => Box c k -> (Box c k, Box c k)
+splitBoxChannels BoxLeaf = (BoxLeaf, BoxLeaf)
+splitBoxChannels (BoxNode _ l k w r) =
+  let (lp, ln) = splitBoxChannels l
+      (rp, rn) = splitBoxChannels r
+  in case compare w zeroWeight of
+       GT => (joinBox lp k w rp, join2Box ln rn)
+       LT => (join2Box lp rp, joinBox ln k (negWeight w) rn)
+       EQ => (join2Box lp rp, join2Box ln rn)
+

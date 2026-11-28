@@ -867,7 +867,15 @@ freezeStateStreamWith g yieldBound stepBudget stepFn initA =
             else loop (minus yRem yCost) sRem (S currTick) (yUsed + yCost) (S sUsed) (skAcc + sk) nxt
 
 ||| Decoupled Yield/Step Freeze-Out Evaluator over any `TimeStream t a`,
-||| expressed directly as a thin specialization of `freezeStateStreamWith`.
+||| expressed directly as a thin specialization of `freezeStateStreamWith`:
+||| - `StreamDone`       : halts immediately with `NaturalCompletion` (consumes `0` yield, `0` steps)
+||| - `StreamSkip`       : advances the tick cursor `(S tk, acc)` with `yCost = 0` (`yieldsConsumed`
+|||                        unchanged, `stepsConsumed` and `freezeTick` each incremented by `1`)
+||| - `StreamYield term` : combines `term` into the accumulator at `yCost = 1` (freezes out with
+|||                        `YieldExhausted` if `remainingYield == 0`; otherwise increments
+|||                        `yieldsConsumed`, `stepsConsumed`, and `freezeTick` by `1`)
+||| Note: Because `StreamSkip` is routed with `yCost = 0`, `yieldsConsumed` tracks strictly
+||| active `StreamYield` ticks, whereas `stepsConsumed` tracks total evaluated ticks (`yields + skips`).
 public export
 freezeTimeStreamWith :
   {0 t   : Time} ->
